@@ -32,7 +32,7 @@ from pybullet_tools.utils import mesh_from_points, create_mesh, create_plane, TA
 SAVE = False
 FROM_SAVED = True
 SEMANTIC_LABELS = True
-CREATE_PB_MODEL = True
+CREATE_PB_MODEL = False
 
 
 def get_color_image():
