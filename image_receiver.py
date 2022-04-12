@@ -21,7 +21,7 @@ sys.path.extend(
 import open3d as o3d
 from scipy.spatial.transform import Rotation
 from pyquaternion import Quaternion
-from image_client_movo.single_scene_graph import get_semantic_labels, label_dict
+from single_scene_graph import get_semantic_labels, label_dict
 import time
 from collections import defaultdict
 import random
@@ -32,7 +32,7 @@ from pybullet_tools.utils import mesh_from_points, create_mesh, create_plane, TA
 SAVE = False
 FROM_SAVED = True
 SEMANTIC_LABELS = True
-CREATE_PB_MODEL = True
+CREATE_PB_MODEL = False
 
 
 def get_color_image():
@@ -92,6 +92,7 @@ def generate_pointcloud_default(received_images):
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
     pcd = pcd.voxel_down_sample(voxel_size=0.001)
     o3d.visualization.draw_geometries([pcd])
+    o3d.io.write_point_cloud("generated_pointcloud.pcd", pcd, print_progress=True)
 
 
 def generate_pointcloud_saved():
@@ -233,6 +234,7 @@ def generate_pointcloud_saved():
 
     else:
         o3d.visualization.draw_geometries([pcd])
+        o3d.io.write_point_cloud("generated_pointcloud.pcd", pcd, print_progress=True)
 
 
 
