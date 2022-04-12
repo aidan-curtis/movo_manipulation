@@ -18,7 +18,7 @@ def visualize_result(img, pred, index=None):
     if index is not None:
         pred = pred.copy()
         pred[pred != index] = -1
-        print(f'{names[index+1]}:')
+        #print(f'{names[index+1]}:')
         
     # colorize prediction
     pred_color = colorEncode(pred, colors).astype(numpy.uint8)
@@ -69,7 +69,7 @@ label_dict = { 0:0, # Walls,
 def get_semantic_labels(img_data):
     np_image = numpy.array(img_data).astype(numpy.uint8)
     # np_image = numpy.transpose(np_image, (2, 0, 1))
-    print(np_image.shape)
+    #print(np_image.shape)
     pil_image = PIL.Image.fromarray(np_image)
     img_data = pil_to_tensor(pil_image)
 
@@ -84,7 +84,7 @@ def get_semantic_labels(img_data):
     # Get the predicted scores for each pixel
     _, pred = torch.max(scores, dim=1)
     pred = pred.cpu()[0].numpy()
-    print(pred)
+    #print(pred)
 
     # # filter prediction class if requested
     pred = pred.copy()
@@ -92,7 +92,7 @@ def get_semantic_labels(img_data):
 
     for index in label_dict.keys():
         zero_pred[pred == index] = label_dict[index]
-        print(f'{names[index+1]}:')
+        #print(f'{names[index+1]}:')
             
     pred = zero_pred
     # colorize prediction
@@ -103,7 +103,7 @@ if __name__=="__main__":
     pil_image = PIL.Image.open('rgb/1649195040065.png').convert('RGB')
     img_original = numpy.array(pil_image)
     img_data = pil_to_tensor(pil_image)
-    print(img_data)
+    #print(img_data)
     singleton_batch = {'img_data': img_data[None].cuda()}
     output_size = img_data.shape[1:]
 

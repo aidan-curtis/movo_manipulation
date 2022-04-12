@@ -25,9 +25,6 @@ from single_scene_graph import get_semantic_labels, label_dict
 import time
 from collections import defaultdict
 import random
-from movo.movo_utils import MOVO_PATH, MovoPolicy, MovoRobot
-
-from pybullet_tools.utils import mesh_from_points, create_mesh, create_plane, TAN, GREY, add_line, load_pybullet
 
 SAVE = False
 FROM_SAVED = True
@@ -150,7 +147,10 @@ def generate_pointcloud_saved():
     # pcd = pcd.voxel_down_sample(voxel_size=0.001)
 
     if(CREATE_PB_MODEL):
+        from movo.movo_utils import MOVO_PATH, MovoPolicy, MovoRobot
+        from pybullet_tools.utils import mesh_from_points, create_mesh, create_plane, TAN, GREY, add_line, load_pybullet
         import pybullet as p
+        
         p.connect(p.GUI)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
         create_plane(mass=0, color=TAN)
