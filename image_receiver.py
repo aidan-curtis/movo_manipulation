@@ -54,6 +54,8 @@ def generate_pointcloud_default(received_images):
     pcd = None
     start = True
     i = 0
+
+
     for data in received_images:
         rgb_image = np.frombuffer(data['rgb_data'], dtype=np.uint8).reshape(data['rgb_height'], data['rgb_width'], -1)
         rgb_image = rgb_image[:,:, [2,1,0]]
@@ -98,6 +100,7 @@ def generate_pointcloud_saved():
     parameters = o3d.camera.PinholeCameraIntrinsic(960, 540, 528.612, 531.854, 477.685, 255.955)
     f1 = open("KeyFrameTrajectory.txt", "r")
     f2 = open("slam_images.txt", "r")
+
 
 
     start =True
@@ -150,7 +153,7 @@ def generate_pointcloud_saved():
         from movo.movo_utils import MOVO_PATH, MovoPolicy, MovoRobot
         from pybullet_tools.utils import mesh_from_points, create_mesh, create_plane, TAN, GREY, add_line, load_pybullet
         import pybullet as p
-        
+
         p.connect(p.GUI)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
         create_plane(mass=0, color=TAN)

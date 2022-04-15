@@ -2,70 +2,209 @@ import open3d as o3d
 import numpy as np
 import os
 import sys
-
+from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
 
-def convert_point_to_pixel(point, grid_shape, min_bounds, dimensions):
+ratio = 10
+world_length = 50
+
+dimensions_world = [world_length,world_length]
+dimensions_pixel = [int(world_length*ratio), int(world_length*ratio)]
+
+min_bounds = [-world_length/2, -world_length/2]
+max_bounds = [world_length/2, world_length/2]
+
+
+def convert_point_to_pixel(point):
 
 	u,v = point[0], point[2]
-	u = int(((u - min_bounds[0])/dimensions[0])*(grid_shape[0]-1))
-	v = int(((v - min_bounds[1])/dimensions[1])*(grid_shape[1]-1))
+	u = int(((u - min_bounds[0])/dimensions_world[0])*(dimensions_pixel[0]-1))
+	v = int(((v - min_bounds[1])/dimensions_world[1])*(dimensions_pixel[1]-1))
 
 	return u,v
 
+def pcd_to_grid(pcd, show_camera=False):
 
-ratio = 10
-
-pcd = o3d.io.read_point_cloud("generated_pointcloud.pcd")
-
-
-
-min_bounds = pcd.get_min_bound()
-min_bounds = [min_bounds[0], min_bounds[2]]
-
-max_bounds = pcd.get_max_bound()
-max_bounds = [max_bounds[0], max_bounds[2]]
+	# Just leave space that the robot can collide with
+	bb = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_bounds[0], -1.02, min_bounds[1])
+		, max_bound=(max_bounds[0], 0.1, max_bounds[1]))
+	pcd = pcd.crop(bb)
 
 
-dimensions_world = ((abs(min_bounds[0])) + (abs(max_bounds[0])),
-			        (abs(min_bounds[1])) + (abs(max_bounds[1])))
+	cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30,
+	                                                    std_ratio=5.0)
+	pcd = pcd.select_by_index(ind)
+
+	#o3d.visualization.draw_geometries([pcd])
+
+	# Get the points and compute occupancy grid
+	# TRY TO MAKE IT MOPRE EFFICIENT
+	points = np.asarray(pcd.points)
+
+	grid_map = np.zeros(dimensions_pixel)
+
+	for point in points:
+		u,v = convert_point_to_pixel(point)
+
+		grid_map[u,v]+=1
+
+	grid_map[grid_map <= 20] = 0
+	grid_map[grid_map > 20] = 1
+
+	if show_camera:
+		f1 = open("KeyFrameTrajectory.txt", "r")
+		for line in f1:
+		    parsed = line.split()
+		    xyz = np.array([float(parsed[1]), -float(parsed[2]), -float(parsed[3])])
+
+		    camera_position = convert_point_to_pixel(xyz)
+		    grid_map[camera_position] = 5
+
+	grid_map = np.flip(grid_map, axis=0)
+	plt.imshow(grid_map)
+	plt.show()
+
+	return grid_map
 
 
-dimensions_pixel = ((int(abs(min_bounds[0])) + int(abs(max_bounds[0])))*10,
-			        (int(abs(min_bounds[1])) + int(abs(max_bounds[1])))*10)
+def expand_grid(grid_map, pcd, camera_pose):
+
+	camera_position = convert_point_to_pixel([camera_pose[0], -camera_pose[1], -camera_pose[2]])
+
+
+	new_map = np.array(np.zeros(dimensions_pixel))
+
+	bb = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_bounds[0], -1.02, min_bounds[1])
+		, max_bound=(max_bounds[0], 0.1, max_bounds[1]))
+	pcd = pcd.crop(bb)
+
+
+	cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30,
+	                                                    std_ratio=5.0)
+	pcd = pcd.select_by_index(ind)
+
+	points = np.asarray(pcd.points)
+
+
+	for point in points:
+		u,v = convert_point_to_pixel(point)
+
+		new_map[u,v]+=1
+
+	obstacles = np.where(new_map > 20)
+	obstacles = list(zip(obstacles[0], obstacles[1]))
+
+	for obstacle in obstacles:
+		#obstacle = obstacles[i]
+		#print(obstacle)
+		grid_map[obstacle] = 5
+		line = ray_cast(camera_position[0], camera_position[1],
+						obstacle[0], obstacle[1])
+		#print(line)
+		for elem in line:
+			#print(elem)
+			if grid_map[elem[0], elem[1]] != 5:
+				grid_map[elem[0], elem[1]] = 1
+
+	return grid_map
+
+
+def ray_cast(x0, y0, x1, y1):
+	dx = abs(x1 - x0)
+	sx = 1 if x0 < x1 else -1
+	dy = -abs(y1 - y0)
+	sy = 1 if y0 < y1 else -1
+	error = dx + dy
+
+	points = []
+	while True:
+		points.append([x0, y0])
+		if x0 == x1 and y0 == y1: break
+		e2 = 2*error
+
+		if e2 >= dy:
+			if x0 == x1: break
+			error = error + dy
+			x0 = x0 + sx
+		if e2 <= dx:
+			if y0 == y1: break
+			error = error + dx 
+			y0 = y0 +sy
+	return points
 
 
 
-# Just leave space that the robot can collide with
-bb = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_bounds[0], -1.02, min_bounds[1])
-	, max_bound=(max_bounds[0], 0.1, max_bounds[1]))
-pcd = pcd.crop(bb)
+def grid_constructor():
 
-
-cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30,
-                                                    std_ratio=5.0)
-pcd = pcd.select_by_index(ind)
-
-#o3d.visualization.draw_geometries([pcd])
+    grid_map = np.array(np.zeros(dimensions_pixel))
 
 
 
-# Get the points and compute occupancy grid
-# TRY TO MAKE IT MOPRE EFFICIENT
-points = np.asarray(pcd.points)
-
-grid_map = np.zeros(dimensions_pixel)
-
-
-for point in points:
-	u,v = convert_point_to_pixel(point, grid_map.shape, min_bounds, dimensions_world)
-
-	grid_map[u,v]+=1
-
-grid_map[grid_map <= 20] = 0
-grid_map[grid_map > 20] = 1
+    pose_graph = o3d.pipelines.registration.PoseGraph()
+    parameters = o3d.camera.PinholeCameraIntrinsic(960, 540, 528.612, 531.854, 477.685, 255.955)
+    f1 = open("KeyFrameTrajectory.txt", "r")
+    f2 = open("slam_images.txt", "r")
 
 
-plt.imshow(grid_map)
-plt.show()
+
+    start =True
+    pcd = None
+    i = 0
+    for line in f1:
+        
+        line_img = f2.readline().split()
+
+        parsed = line.split()
+        xyz = [float(parsed[1]), float(parsed[2]), float(parsed[3])]
+        quaternion = [parsed[4], parsed[5], parsed[6], parsed[7]]
+
+        color = o3d.io.read_image(line_img[1])
+        depth = o3d.io.read_image(line_img[3])
+
+
+        new_colors = color
+        rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(new_colors, depth, depth_trunc=1000, convert_rgb_to_intensity=False)
+
+        r = Rotation.from_quat(quaternion)
+        odom = np.vstack((np.hstack((r.as_matrix(),np.array([xyz]).T)), np.array([[0.0,0.0,0.0,1]]))).astype(np.float64)
+
+        if start:
+            pose_graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(np.identity(4)))
+            pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
+                rgbd,
+                parameters)
+            start = False
+            i+=1
+            pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+            grid_map = expand_grid(grid_map, pcd, xyz)
+            #o3d.visualization.draw_geometries([pcd])
+            continue
+
+
+        else:
+            pcd_new = o3d.geometry.PointCloud.create_from_rgbd_image(
+                rgbd,
+                parameters)
+            pose_graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(odom))
+            pcd_new.transform(pose_graph.nodes[i].pose)
+            pcd_new.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+            pcd += pcd_new
+            grid_map = expand_grid(grid_map, pcd_new, xyz)
+            #o3d.visualization.draw_geometries([pcd])
+
+        i+=1
+
+    grid_map = np.flip(grid_map, axis=0)
+    plt.imshow(grid_map)
+    plt.show()
+    #o3d.visualization.draw_geometries([pcd])
+
+    return grid_map
+    
+
+
+
+if __name__ == "__main__":
+	#pcd_to_grid(o3d.io.read_point_cloud("generated_pointcloud.pcd"), show_camera=True)
+	final_grid = grid_constructor()

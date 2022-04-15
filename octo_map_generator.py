@@ -20,22 +20,10 @@ def display_inlier_outlier(cloud, ind):
 
 pcd = o3d.io.read_point_cloud("generated_pointcloud.pcd")
 
-o3d.visualization.draw_geometries([pcd])
+#o3d.visualization.draw_geometries([pcd])
 
 min_bounds = pcd.get_min_bound()
 max_bounds = pcd.get_max_bound()
-
-
-
-ratio = 10
-new_size = (int((abs(min_bounds[0]) + abs(max_bounds[0]))*ratio+1), 
-			int((abs(min_bounds[0]) + abs(max_bounds[0]))*ratio+1))
-print(new_size)
-
-
-
-
-
 
 
 
@@ -48,7 +36,36 @@ cl, ind = pcd.remove_statistical_outlier(nb_neighbors=30,
                                                     std_ratio=5.0)
 pcd = pcd.select_by_index(ind)
 
-o3d.visualization.draw_geometries([pcd])
+
+cameras = []
+points = []
+lines= []
+
+f1 = open("KeyFrameTrajectory.txt", "r")
+i = 0
+for line in f1:
+    parsed = line.split()
+    xyz = np.array([float(parsed[1]), -float(parsed[2]), -float(parsed[3])])
+
+    mesh_frame = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
+    mesh_frame.paint_uniform_color([0, 0, 1.0])
+    mesh_frame.translate(xyz)
+    if i != 0:
+        lines.append([i-1,i])
+    else:
+        mesh_frame.paint_uniform_color([0, 1.0, 0])
+    cameras.append(mesh_frame)
+    points.append(xyz)
+    i+=1
+
+colors = [[1, 0, 0] for i in range(len(lines))]
+line_set = o3d.geometry.LineSet()
+line_set.points = o3d.utility.Vector3dVector(points)
+line_set.lines = o3d.utility.Vector2iVector(lines)
+line_set.colors = o3d.utility.Vector3dVector(colors)
+
+
+o3d.visualization.draw_geometries([pcd, line_set] + cameras)
 
 
 print('octree division')
