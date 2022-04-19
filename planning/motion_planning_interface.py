@@ -2,7 +2,10 @@ from collections import defaultdict, deque, namedtuple
 import pybullet as p
 from itertools import combinations, count, cycle, islice, product
 import numpy as np
-
+import time
+import warnings
+import sys
+import os
 
 warnings.filterwarnings("ignore")
 sys.path.extend(
@@ -11,12 +14,17 @@ sys.path.extend(
     ]
 )
 
-from pybullet_tools.motion_planners.rrt_connect import birrt
+from motion.motion_planners.rrt_connect import birrt
 from pybullet_tools.separating_axis import separating_axis_theorem
-from pybullet_tools.utils import JointInfo, Interval, OOBB,
-    Pose, multiply, Point, Euler, get_oobb_vertices, is_circular, wrap_angle, 
-    all_between
+from pybullet_tools.utils import JointInfo, Interval, OOBB, \
+    Pose, multiply, Point, Euler, get_oobb_vertices, is_circular, wrap_angle, \
+    all_between, create_box, TAN, load_pybullet, get_aabb, joint_from_name, \
+    interval_generator, circular_difference, set_joint_positions, create_box, \
+    set_pose, get_aabb, get_pose, RGBA
+import math
 
+MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
+MOVO_PATH = os.path.abspath(MOVO_URDF)
 
 def check_initial_end(start_conf, end_conf, collision_fn, verbose=True):
     # TODO: collision_fn might not accept kwargs
@@ -27,6 +35,13 @@ def check_initial_end(start_conf, end_conf, collision_fn, verbose=True):
         print("Warning: end configuration is in collision")
         return False
     return True
+
+
+
+def create_pillar(width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
+    # TODO: use the color when naming
+    return  create_box(w=width, l=length, h=height, color=color, **kwargs)
+    
 
 def plan_2d_joint_motion(
     robot,
@@ -159,17 +174,69 @@ def plan_2d_joint_motion(
     return plan
 
 
-def setup_robot_pybullet(args):
-    if args.viewer and args.client == 0:
-        client = bc.BulletClient(connection_mode=p.GUI)
-        # set_preview(False, client=client)
-    else:
-        client = bc.BulletClient(connection_mode=p.DIRECT)
+def setup_world(robot, **kwargs):
 
-    robot_body = load_pybullet(robot_paths[args.robot], fixed_base=True, client=client)
-    return robot_body, client
+    floor_size = 6
+    floor = create_pillar(width=floor_size, length=floor_size, color=TAN, **kwargs)
+
+        # cracker_box | tomato_soup_can | potted_meat_can | bowl
+    side = 1    
+    box_mass = 0.2
+    height = 1
+    
+    box = create_box(
+                w=side,
+                l=side,
+                h=height,
+                color=RGBA(219 / 256.0, 50 / 256.0, 54 / 256.0, 1.0),
+                mass=box_mass,
+                **kwargs
+            )
+
+    set_pose(box, Pose(point=Point(x=0, y=0, z=height / 2.0)), **kwargs)
+
+
+    return [box]
+
+    
+
+def setup_robot_pybullet():
+    p.connect(p.GUI)
+    robot_body = load_pybullet(MOVO_PATH, fixed_base=True)
+    return robot_body
 
 
 
 if __name__ == '__main__':
-    pass
+    robot_body = setup_robot_pybullet()
+    obstacles = setup_world(robot_body)
+
+    robot_aabb = get_aabb(robot_body)
+
+    joints = [joint_from_name(robot_body, "x"),
+              joint_from_name(robot_body, "y"),
+              joint_from_name(robot_body, "theta")]
+
+    obstacle_oobbs = [OOBB(get_aabb(obj), get_pose(obj)) for obj in obstacles]
+
+    min_vals = [-3, -3, -math.pi*2]
+    max_vals = [3, 3, math.pi*2]
+
+    q1 = [-2, 0, 0]
+    q2 = [2, 0, 0]
+
+
+    resolutions = 0.1 * np.ones(len(q2))
+    plan = plan_2d_joint_motion(robot_body, robot_aabb, joints, min_vals, max_vals, q1, q2, resolutions=resolutions, obstacle_oobbs=obstacle_oobbs)
+    print(plan)
+
+    for plan_step in plan:
+        set_joint_positions(robot_body, joints, plan_step)
+        time.sleep(0.1)
+
+    # while(True):
+    #     p.setGravity(0,0,0)
+    #     time.sleep(0.1)
+
+
+
