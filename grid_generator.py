@@ -4,16 +4,34 @@ import os
 import sys
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
+import cv2
 
 
-ratio = 10
-world_length = 50
+ratio = 40
+world_length = 40
 
 dimensions_world = [world_length,world_length]
 dimensions_pixel = [int(world_length*ratio), int(world_length*ratio)]
 
 min_bounds = [-world_length/2, -world_length/2]
 max_bounds = [world_length/2, world_length/2]
+
+lower=np.array([-0.4083206145763397, -0.3692174541962325, -0.0030000009417533724])
+upper=np.array([0.6765739326727533, 0.34854376903233264, 1.5969516277868887])
+
+
+# Change 0.5 to 0.8
+dimensions_movo = (abs(lower)+abs(upper))*0.6
+
+MOVO_LENGTH = dimensions_movo[0]
+MOVO_WIDTH = dimensions_movo[1]
+MOVO_HEIGHT = dimensions_movo[2]
+
+front_distance = ((MOVO_LENGTH * 1/10)**2 + (MOVO_WIDTH/2)**2)**0.5
+back_distance = ((MOVO_LENGTH* 9/10)**2 + (MOVO_WIDTH/2)**2)**0.5
+
+angle_forward = np.arcsin((MOVO_WIDTH/2)/front_distance)
+angle_backward = np.arcsin((MOVO_WIDTH/2)/back_distance)
 
 
 def convert_point_to_pixel(point):
@@ -23,6 +41,7 @@ def convert_point_to_pixel(point):
 	v = int(((v - min_bounds[1])/dimensions_world[1])*(dimensions_pixel[1]-1))
 
 	return u,v
+
 
 def pcd_to_grid(pcd, show_camera=False):
 
@@ -66,6 +85,86 @@ def pcd_to_grid(pcd, show_camera=False):
 	plt.show()
 
 	return grid_map
+
+
+def robot_to_grid(position, theta):
+	#r = Rotation.from_quat(quaternion)
+	#theta = r.as_rotvec()[1] 
+
+	grid = np.zeros(dimensions_pixel)
+
+
+	points = []
+	for i in range(4):
+		if i == 0:
+			x = front_distance * np.cos(theta + angle_forward)
+			y = front_distance * np.sin(theta + angle_forward)
+
+		elif i == 1:
+			x = front_distance * np.cos(theta - angle_forward)
+			y = front_distance * np.sin(theta - angle_forward)
+
+		elif i == 2:
+			x = back_distance * np.cos(theta + angle_backward + np.pi)
+			y = back_distance * np.sin(theta + angle_backward + np.pi)
+
+		elif i == 3:
+			x = back_distance * np.cos(theta - angle_backward - np.pi)
+			y = back_distance * np.sin(theta - angle_backward - np.pi)
+
+		
+
+		x = -(position[2] + x)
+		y = (position[0] + y)
+
+		points.append(convert_point_to_pixel([x,0,y]))
+
+	cv2.fillPoly(grid, pts=np.int32([points]), color=1)
+
+	robot_pixels = []
+	loc = np.where(grid == 1)
+
+	for pixel in zip(loc[0], loc[1]):
+		robot_pixels.append(pixel)
+
+	return robot_pixels
+
+def robot_bb_grid(position, theta):
+	grid = np.zeros(dimensions_pixel)
+
+
+	points = []
+	for i in range(4):
+		if i == 0:
+			x = front_distance * np.cos(theta + angle_forward)
+			y = front_distance * np.sin(theta + angle_forward)
+
+		elif i == 1:
+			x = front_distance * np.cos(theta - angle_forward)
+			y = front_distance * np.sin(theta - angle_forward)
+
+		elif i == 2:
+			x = back_distance * np.cos(theta + angle_backward + np.pi)
+			y = back_distance * np.sin(theta + angle_backward + np.pi)
+
+		elif i == 3:
+			x = back_distance * np.cos(theta - angle_backward - np.pi)
+			y = back_distance * np.sin(theta - angle_backward - np.pi)
+
+		x = -(position[2] + x)
+		y = (position[0] + y)
+
+		points.append(convert_point_to_pixel([x,0,y]))
+
+	cv2.polylines(grid, pts=np.int32([points]),isClosed=True, color=1, thickness=1)
+
+	robot_pixels = []
+	loc = np.where(grid == 1)
+
+	for pixel in zip(loc[0], loc[1]):
+		robot_pixels.append(pixel)
+
+	return robot_pixels
 
 
 def expand_grid(grid_map, pcd, camera_pose):
@@ -148,7 +247,6 @@ def grid_constructor():
 
 
 
-    start =True
     pcd = None
     i = 0
     for line in f1:
@@ -169,15 +267,15 @@ def grid_constructor():
         r = Rotation.from_quat(quaternion)
         odom = np.vstack((np.hstack((r.as_matrix(),np.array([xyz]).T)), np.array([[0.0,0.0,0.0,1]]))).astype(np.float64)
 
-        if start:
+        if i == 0:
             pose_graph.nodes.append(o3d.pipelines.registration.PoseGraphNode(np.identity(4)))
             pcd = o3d.geometry.PointCloud.create_from_rgbd_image(
                 rgbd,
                 parameters)
-            start = False
             i+=1
             pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
             grid_map = expand_grid(grid_map, pcd, xyz)
+
             #o3d.visualization.draw_geometries([pcd])
             continue
 
@@ -191,12 +289,13 @@ def grid_constructor():
             pcd_new.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
             pcd += pcd_new
             grid_map = expand_grid(grid_map, pcd_new, xyz)
+
             #o3d.visualization.draw_geometries([pcd])
 
         i+=1
 
     grid_map = np.flip(grid_map, axis=0)
-    plt.imshow(grid_map)
+    plt.imshow(grid_map, cmap="gray")
     plt.show()
     #o3d.visualization.draw_geometries([pcd])
 
@@ -208,3 +307,4 @@ def grid_constructor():
 if __name__ == "__main__":
 	#pcd_to_grid(o3d.io.read_point_cloud("generated_pointcloud.pcd"), show_camera=True)
 	final_grid = grid_constructor()
+	plt.imsave("grid.png", final_grid, cmap="gray")

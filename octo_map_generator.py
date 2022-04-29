@@ -41,11 +41,13 @@ cameras = []
 points = []
 lines= []
 
-f1 = open("KeyFrameTrajectory.txt", "r")
+f1 = open("planned_path.txt", "r")
+#f1 = open("KeyFrameTrajectory.txt", "r")
 i = 0
 for line in f1:
     parsed = line.split()
-    xyz = np.array([float(parsed[1]), -float(parsed[2]), -float(parsed[3])])
+    #xyz = np.array([float(parsed[1]), -float(parsed[2]), -float(parsed[3])])
+    xyz = np.array([-float(parsed[1]), 0, -float(parsed[0])])
 
     mesh_frame = o3d.geometry.TriangleMesh.create_sphere(radius=0.01)
     mesh_frame.paint_uniform_color([0, 0, 1.0])
@@ -68,7 +70,6 @@ line_set.colors = o3d.utility.Vector3dVector(colors)
 o3d.visualization.draw_geometries([pcd, line_set] + cameras)
 
 
-print('octree division')
 octree = o3d.geometry.Octree(max_depth=10)
 octree.convert_from_point_cloud(pcd, size_expand=0.1)
 o3d.visualization.draw_geometries([octree])
