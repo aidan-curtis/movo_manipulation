@@ -234,6 +234,37 @@ def setup_robot_pybullet():
     robot_body = load_pybullet(MOVO_PATH, fixed_base=True)
     return robot_body
 
+def visualize_path_pcd(pcd, path):
+    kin = cph.kinematics.KinematicChain("models/movo_model/movo_robotiq_collision.urdf")
+    vis = cph.visualization.Visualizer()
+    vis.create_window()
+
+
+    initial_pose = np.identity(4)
+    initial_pose[1:3, 1:3] = [[np.cos(-np.pi/2), -np.sin(-np.pi/2)], [np.sin(-np.pi/2), np.cos(-np.pi/2)]]
+    initial_pose[:3, 3] = [0,-1.15,0]
+
+
+    for i in range(len(path)):
+        
+        if i%5 == 0 or i == len(path)-1:
+            pose = path[i]
+            theta = pose[2] + np.pi/2
+            new_pose = np.identity(4)
+            new_pose[0:2, 0:2] = [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+            new_pose[:3, 3] = [-pose[1],pose[0],0]
+
+            new_pose = initial_pose@new_pose
+
+            poses = kin.forward_kinematics(default_joints, new_pose)
+            geoms = kin.get_transformed_visual_geometry_map(poses)
+
+            for v in geoms.values():
+                vis.add_geometry(v)
+
+    vis.add_geometry(pcd)
+    vis.run()
+
 
 
 if __name__ == '__main__':
