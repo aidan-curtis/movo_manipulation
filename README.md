@@ -2,10 +2,12 @@
 
 ## Simulated experiments
 Install dependencies
+
 ``git submodule update --init --recursive``
 ``python -m pip install -r requirements.txt``
 
 Run an experiment
+
 ``python run_planner.py --algo=random_search --env=empty``
 
 ## Real-world experiments
