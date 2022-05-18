@@ -11,12 +11,20 @@ class Empty(Environment):
     def __init__(self):
         super(Empty, self).__init__()
 
-        self.setup()
         self.start = [0, 0]
         self.goal = [0, 2] # TODO: Create separate class for configuration space
 
+    def disconnect(self):
+        try:
+            p.disconnect()
+        except:
+            pass
+
     def setup(self):
-        p.connect(p.DIRECT)
+
+        self.disconnect()
+        
+        p.connect(p.GUI)
 
         floor_size = 6
         self.floor = create_pillar(width=floor_size, length=floor_size, color=TAN)
