@@ -3,3 +3,4 @@ temp_meshes/
 **/__pycache__
 dataset/*
 results/*
+**/.DS_Store
