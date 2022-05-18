@@ -1,26 +1,13 @@
 import zmq
 import pickle
 import zlib
-import struct
 import numpy as np
-import ctypes
-import matplotlib.pyplot as plt
-from time import sleep
 import imageio
 import shutil
 import os
 import sys
-import warnings
-warnings.filterwarnings("ignore")
-sys.path.extend(
-    [
-        "pddlstream",
-        "pybullet-planning",
-    ]
-)
 import open3d as o3d
 from scipy.spatial.transform import Rotation
-from pyquaternion import Quaternion
 from single_scene_graph import get_semantic_labels, label_dict
 import time
 from collections import defaultdict
@@ -37,7 +24,7 @@ def get_color_image():
     message = pickle.loads(zlib.decompress(socket.recv()))
     
     if message['last']:
-    	return None
+        return None
 
     image = message['image']
     
@@ -118,10 +105,10 @@ def generate_pointcloud_saved():
         depth = o3d.io.read_image(line_img[3])
 
         if(SEMANTIC_LABELS):
-        	new_colors = get_semantic_labels(color) #TODO Batch for efficiency
-        	new_colors = o3d.geometry.Image((new_colors).astype(np.uint8))
+            new_colors = get_semantic_labels(color) #TODO Batch for efficiency
+            new_colors = o3d.geometry.Image((new_colors).astype(np.uint8))
         else:
-        	new_colors = color
+            new_colors = color
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(new_colors, depth, depth_trunc=1000, convert_rgb_to_intensity=False)
 
         r = Rotation.from_quat(quaternion)
@@ -243,81 +230,81 @@ def generate_pointcloud_saved():
 
 if __name__ == '__main__':
 
-	# Read the arguments to the program
-	if len(sys.argv) == 3:
-		# If we need to save the received images to a file
-		SAVE = True if sys.argv[1] == "True" else False
-		# If we just compute the pointcloud from saved images
-		FROM_SAVED = True if sys.argv[2] == "True" else False
+    # Read the arguments to the program
+    if len(sys.argv) == 3:
+        # If we need to save the received images to a file
+        SAVE = True if sys.argv[1] == "True" else False
+        # If we just compute the pointcloud from saved images
+        FROM_SAVED = True if sys.argv[2] == "True" else False
 
-	if not FROM_SAVED:
-	    # Creates new communication with the server
-	    context = zmq.Context()
-	    socket = context.socket(zmq.REQ)
-	    socket.connect("tcp://192.168.0.246:5555")
+    if not FROM_SAVED:
+        # Creates new communication with the server
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.connect("tcp://192.168.0.246:5555")
 
-	    received_images = []
-	    start = time.time()
+        received_images = []
+        start = time.time()
 
-	    print("Requesting Images")
-	    while True:
-	    	message = get_color_image()
-	    	if message == None:
-	    		break
-	    	received_images.append(message)
-
-
-	    end = time.time()
-	    elapsed = end-start
-	    print(elapsed)
-
-	    print("Processing Images")
-
-	    shutil.rmtree("rgb")
-	    shutil.rmtree("depth")
-	    os.mkdir("rgb")
-	    os.mkdir("depth")
-
-	    if os.path.exists("slam_images.txt"):
-	        os.remove("slam_images.txt")
-
-	    if os.path.exists("KeyFrameTrajectory.txt"):
-	        os.remove("KeyFrameTrajectory.txt")
-
-	    
-
-	        # If saving is required
-	    if SAVE:
-	        print("Saving Images")
-	        shutil.rmtree("rgb")
-	        shutil.rmtree("depth")
-	        os.mkdir("rgb")
-	        os.mkdir("depth")
-
-	        if os.path.exists("slam_images.txt"):
-	            os.remove("slam_images.txt")
+        print("Requesting Images")
+        while True:
+            message = get_color_image()
+            if message == None:
+                break
+            received_images.append(message)
 
 
+        end = time.time()
+        elapsed = end-start
+        print(elapsed)
 
-	        for data in received_images:
-	            rgb_image = np.frombuffer(data['rgb_data'], dtype=np.uint8).reshape(data['rgb_height'], data['rgb_width'], -1)
-	            rgb_image = rgb_image[:,:, [2,1,0]]
+        print("Processing Images")
 
-	            depth_image = np.frombuffer(data['depth_data'], dtype=np.uint16).reshape(data['depth_height'], data['depth_width'], -1)
-	            rgb_path = 'rgb/{}.png'.format(data['rgb_stamp'])
-	            depth_path = 'depth/{}.png'.format(data['depth_stamp'])
-	            imageio.imwrite(rgb_path, rgb_image) 
-	            imageio.imwrite(depth_path, depth_image)
+        shutil.rmtree("rgb")
+        shutil.rmtree("depth")
+        os.mkdir("rgb")
+        os.mkdir("depth")
 
-	            with open('slam_images.txt', 'a') as f:
-	                f.write('{} {} {} {}\n'.format(data['rgb_stamp'], rgb_path, data['depth_stamp'], depth_path))
-	            with open('KeyFrameTrajectory.txt', 'a') as f:
-	                f.write('{} {} {} {} {} {} {} {}\n'.format(data['frame_stamp'], data['frame_pos'][0],
-	                    data['frame_pos'][1], data['frame_pos'][2],
-	                    data['frame_quat'][0], data['frame_quat'][1], data['frame_quat'][2], data['frame_quat'][3]))
+        if os.path.exists("slam_images.txt"):
+            os.remove("slam_images.txt")
 
-	    print("Generating Point Cloud")
-	    generate_pointcloud_default(received_images)
-	else:
-		print("Generating Point Cloud")
-		generate_pointcloud_saved()
+        if os.path.exists("KeyFrameTrajectory.txt"):
+            os.remove("KeyFrameTrajectory.txt")
+
+        
+
+            # If saving is required
+        if SAVE:
+            print("Saving Images")
+            shutil.rmtree("rgb")
+            shutil.rmtree("depth")
+            os.mkdir("rgb")
+            os.mkdir("depth")
+
+            if os.path.exists("slam_images.txt"):
+                os.remove("slam_images.txt")
+
+
+
+            for data in received_images:
+                rgb_image = np.frombuffer(data['rgb_data'], dtype=np.uint8).reshape(data['rgb_height'], data['rgb_width'], -1)
+                rgb_image = rgb_image[:,:, [2,1,0]]
+
+                depth_image = np.frombuffer(data['depth_data'], dtype=np.uint16).reshape(data['depth_height'], data['depth_width'], -1)
+                rgb_path = 'rgb/{}.png'.format(data['rgb_stamp'])
+                depth_path = 'depth/{}.png'.format(data['depth_stamp'])
+                imageio.imwrite(rgb_path, rgb_image) 
+                imageio.imwrite(depth_path, depth_image)
+
+                with open('slam_images.txt', 'a') as f:
+                    f.write('{} {} {} {}\n'.format(data['rgb_stamp'], rgb_path, data['depth_stamp'], depth_path))
+                with open('KeyFrameTrajectory.txt', 'a') as f:
+                    f.write('{} {} {} {} {} {} {} {}\n'.format(data['frame_stamp'], data['frame_pos'][0],
+                        data['frame_pos'][1], data['frame_pos'][2],
+                        data['frame_quat'][0], data['frame_quat'][1], data['frame_quat'][2], data['frame_quat'][3]))
+
+        print("Generating Point Cloud")
+        generate_pointcloud_default(received_images)
+    else:
+        print("Generating Point Cloud")
+        generate_pointcloud_saved()

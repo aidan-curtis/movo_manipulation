@@ -1,8 +1,8 @@
 # System libs
 import os, csv, torch, numpy, scipy.io, PIL.Image, torchvision.transforms
 # Our libs
-from mit_semseg.models import ModelBuilder, SegmentationModule
-from mit_semseg.utils import colorEncode
+from semseg.mit_semseg.models import ModelBuilder, SegmentationModule
+from semseg.mit_semseg.utils import colorEncode
 import numpy as np
 
 colors = scipy.io.loadmat('semseg/data/color150.mat')['colors']

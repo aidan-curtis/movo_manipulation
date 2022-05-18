@@ -1,4 +1,5 @@
 temp/
 temp_meshes/
-__pycache__
+**/__pycache__
 dataset/*
+results/*

@@ -1,12 +1,4 @@
-warnings.filterwarnings("ignore")
-sys.path.extend(
-    [
-        "pybullet-planning",
-    ]
-)
-
-
-from planning.utils import BodySaver
+from pybullet_planning.pybullet_tools.utils import BodySaver
 
 MAX_KINECT_DISTANCE = 2.5
 COLLISION_DISTANCE = 5e-3  # Distance from fixed obstacles

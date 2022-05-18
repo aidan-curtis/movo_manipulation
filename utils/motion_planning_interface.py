@@ -1,22 +1,12 @@
-import warnings
-import sys
-warnings.filterwarnings("ignore")
-sys.path.extend(
-    [
-        "pybullet-planning",
-    ]
-)
-sys.path.append('/home/josemuguira/MEng/movo_manipulation')
-
 import pybullet as p
 import numpy as np
 import os
 import matplotlib.pyplot as plt
 import cv2
 
-from grid_generator import robot_to_grid, robot_bb_grid
-from motion.motion_planners.rrt_connect import birrt
-from pybullet_tools.utils import OOBB, \
+from utils.grid_generator import robot_to_grid, robot_bb_grid
+from pybullet_planning.motion.motion_planners.rrt_connect import birrt
+from pybullet_planning.pybullet_tools.utils import OOBB, \
     get_oobb_vertices, is_circular, wrap_angle, \
     all_between, create_box, TAN, load_pybullet, get_aabb, joint_from_name, \
     interval_generator, circular_difference, set_joint_positions, create_box, \
@@ -26,7 +16,36 @@ import math
 MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
 MOVO_PATH = os.path.abspath(MOVO_URDF)
 
-grid_map = plt.imread("grid.png")
+DEFAULT_JOINTS = {
+        "pan_joint": -0.07204942405223846,
+        "tilt_joint": -0.599216890335083,
+        "left_shoulder_pan_joint": -1.193271404355226,
+        "left_shoulder_lift_joint": 1.691065746887311,
+        "left_arm_half_joint": -2.9308729618144724,
+        "left_elbow_joint": -1.3548135629153069,
+        "left_wrist_spherical_1_joint": -0.4464001271835176,
+        "left_wrist_spherical_2_joint": 1.8807062523185454,
+        "left_wrist_3_joint": 1.859177258066345,
+        "right_shoulder_pan_joint": -1.990431951339227,
+        "right_shoulder_lift_joint": 1.5555300221621264,
+        "right_arm_half_joint": -0.3052025219808243,
+        "right_elbow_joint": 1.2316691272680973,
+        "right_wrist_spherical_1_joint": 0.5568418170632672,
+        "right_wrist_spherical_2_joint": -1.9205464764358584,
+        "right_wrist_3_joint": -0.059844425487387554,
+        "left_gripper_finger1_joint": -0.0008499202079690222,
+        "left_gripper_finger2_joint": -0.0,
+        "left_gripper_finger3_joint": 0.0,
+        "right_gripper_finger1_joint": 0.0,
+        "linear_joint": 0.3,
+        "right_gripper_finger1_joint": 0,
+        "right_gripper_finger2_joint": 0,
+        "right_gripper_finger1_inner_knuckle_joint": 0,
+        "right_gripper_finger2_inner_knuckle_joint": 0,
+        "right_gripper_finger1_finger_tip_joint": 0,
+        "right_gripper_finger2_finger_tip_joint": 0,
+    }
+
 
 def check_initial_end(start_conf, end_conf, collision_fn, verbose=True):
     # TODO: collision_fn might not accept kwargs
@@ -218,45 +237,17 @@ def setup_robot_pybullet():
 
 
 if __name__ == '__main__':
+    
+    grid_map = plt.imread("grid.png")
+
     robot_body = setup_robot_pybullet()
     obstacles = setup_world(robot_body)
 
-
-    default_joints = {
-        "pan_joint": -0.07204942405223846,
-        "tilt_joint": -0.599216890335083,
-        "left_shoulder_pan_joint": -1.193271404355226,
-        "left_shoulder_lift_joint": 1.691065746887311,
-        "left_arm_half_joint": -2.9308729618144724,
-        "left_elbow_joint": -1.3548135629153069,
-        "left_wrist_spherical_1_joint": -0.4464001271835176,
-        "left_wrist_spherical_2_joint": 1.8807062523185454,
-        "left_wrist_3_joint": 1.859177258066345,
-        "right_shoulder_pan_joint": -1.990431951339227,
-        "right_shoulder_lift_joint": 1.5555300221621264,
-        "right_arm_half_joint": -0.3052025219808243,
-        "right_elbow_joint": 1.2316691272680973,
-        "right_wrist_spherical_1_joint": 0.5568418170632672,
-        "right_wrist_spherical_2_joint": -1.9205464764358584,
-        "right_wrist_3_joint": -0.059844425487387554,
-        "left_gripper_finger1_joint": -0.0008499202079690222,
-        "left_gripper_finger2_joint": -0.0,
-        "left_gripper_finger3_joint": 0.0,
-        "right_gripper_finger1_joint": 0.0,
-        "linear_joint": 0.3,
-        "right_gripper_finger1_joint": 0,
-        "right_gripper_finger2_joint": 0,
-        "right_gripper_finger1_inner_knuckle_joint": 0,
-        "right_gripper_finger2_inner_knuckle_joint": 0,
-        "right_gripper_finger1_finger_tip_joint": 0,
-        "right_gripper_finger2_finger_tip_joint": 0,
-    }
-
     joints = []
     values = []
-    for elem in default_joints:
+    for elem in DEFAULT_JOINTS:
         joints.append(joint_from_name(robot_body, elem))
-        values.append(default_joints[elem])
+        values.append(DEFAULT_JOINTS[elem])
 
     set_joint_positions(robot_body, joints, values)
     robot_aabb = get_aabb(robot_body)
