@@ -15,7 +15,7 @@ import random
 
 SAVE = False
 FROM_SAVED = True
-SEMANTIC_LABELS = True
+SEMANTIC_LABELS = False
 CREATE_PB_MODEL = False
 
 
