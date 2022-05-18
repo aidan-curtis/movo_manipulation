@@ -1,2 +1,4 @@
 temp/
 temp_meshes/
+__pycache__
+dataset/*
