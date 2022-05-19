@@ -1,12 +1,13 @@
 import argparse
 from planners.random_search import RandomSearch
 from environments.empty import Empty
+from environments.complex import Complex
 import pickle 
 from datetime import datetime
 import os
 
 PLANNERS = {"random_search": RandomSearch}
-ENVIRONMENTS = {"empty": Empty}
+ENVIRONMENTS = {"empty": Empty, "complex": Complex}
 RESULTS_DIR = "./results"
 
 def get_args():
@@ -53,4 +54,8 @@ if __name__=="__main__":
     plan = planner.get_plan(env)
     statistics = env.validate_plan(plan)
 
-    write_results(args, statistics)
+    # Uncomment for visualizing the environment
+    #while True:
+    #    i = 0
+
+    #write_results(args, statistics)

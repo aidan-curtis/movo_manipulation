@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from pybullet_planning.pybullet_tools.utils import load_pybullet, set_joint_positions, joint_from_name
+from pybullet_planning.pybullet_tools.utils import (load_pybullet, set_joint_positions, joint_from_name, Point, Pose, 
+                                                    set_pose, create_box, TAN, GREY)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 import os 
 
@@ -29,3 +30,25 @@ class Environment(ABC):
         self.set_defaults(robot_body)
         return robot_body
 
+
+
+    def create_closed_room(self, length, width, center=[0,0], wall_height=2):
+
+        floor = self.create_pillar(width=width, length=length, color=TAN)
+        set_pose(floor, Pose(Point(x=center[0], y=center[1])))
+
+        wall_thickness = 0.1
+        wall_1 = self.create_pillar(width=width, length=wall_thickness, height=wall_height, color=GREY)
+        set_pose(wall_1, Pose(point=Point(x=center[0], y=center[1]+length/2+wall_thickness/2, z=wall_height/2)))
+        wall_2 = self.create_pillar(width=width, length=wall_thickness, height=wall_height, color=GREY)
+        set_pose(wall_2, Pose(point=Point(x=center[0], y=center[1]-(length/2+wall_thickness/2), z=wall_height/2)))
+        wall_3 = self.create_pillar(length=length, width=wall_thickness, height=wall_height, color=GREY)
+        set_pose(wall_3, Pose(point=Point(y=center[1], x=center[0]+width/2+wall_thickness/2, z=wall_height/2)))
+        wall_4 = self.create_pillar(length=length, width=wall_thickness, height=wall_height, color=GREY)
+        set_pose(wall_4, Pose(point=Point(y=center[1], x=center[0]-(width/2+wall_thickness/2), z=wall_height/2)))
+
+        return floor, wall_1, wall_2, wall_3, wall_4
+
+
+    def create_pillar(self, width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
+        return  create_box(w=width, l=length, h=height, color=color, **kwargs)
