@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pybullet_planning.pybullet_tools.utils import (load_pybullet, set_joint_positions, joint_from_name, Point, Pose, 
-                                                    set_pose, create_box, TAN, GREY)
+                                                    set_pose, create_box, TAN, GREY, get_link_pose,
+                                                    get_camera_matrix, get_image_at_pose)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 import os 
 
@@ -31,6 +32,24 @@ class Environment(ABC):
         return robot_body
 
 
+    def get_robot_vision(self):
+        """
+        Gets the rgb and depth image of the robot
+        """
+        fx = 528.612
+        fy = 531.854
+        cx = 477.685
+        cy = 255.955
+        width = 960
+        height = 540
+
+        # 13 is the link of the optical frame of the rgb camera
+        camera_pose = get_link_pose(self.robot, 13)
+        camera_matrix = get_camera_matrix(width, height, fx, fy)
+        image_data = get_image_at_pose(camera_pose, camera_matrix)
+
+        return image_data[0], image_data[1]
+        
 
     def create_closed_room(self, length, width, center=[0,0], wall_height=2):
 

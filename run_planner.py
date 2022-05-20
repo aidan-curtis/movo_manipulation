@@ -2,12 +2,18 @@ import argparse
 from planners.random_search import RandomSearch
 from environments.empty import Empty
 from environments.complex import Complex
+from environments.work_tradeoff import WorkTradeoff
 import pickle 
 from datetime import datetime
 import os
+import numpy as np
+import matplotlib.pyplot as plt
+import open3d as o3d
+
+from utils.utils import get_pointcloud_from_rgb_and_depth
 
 PLANNERS = {"random_search": RandomSearch}
-ENVIRONMENTS = {"empty": Empty, "complex": Complex}
+ENVIRONMENTS = {"empty": Empty, "complex": Complex, "work_tradeoff": WorkTradeoff}
 RESULTS_DIR = "./results"
 
 def get_args():
@@ -54,8 +60,13 @@ if __name__=="__main__":
     plan = planner.get_plan(env)
     statistics = env.validate_plan(plan)
 
+    image_data = env.get_robot_vision()
+
+    get_pointcloud_from_rgb_and_depth(image_data[0], image_data[1])
+
+
     # Uncomment for visualizing the environment
-    #while True:
-    #    i = 0
+    while True:
+        i = 0
 
     #write_results(args, statistics)
