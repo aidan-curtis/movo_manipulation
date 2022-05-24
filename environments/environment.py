@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from pybullet_planning.pybullet_tools.utils import (load_pybullet, set_joint_positions, joint_from_name, Point, Pose, 
                                                     set_pose, create_box, TAN, GREY, get_link_pose,
-                                                    get_camera_matrix, get_image_at_pose)
+                                                    get_camera_matrix, get_image_at_pose, RGBA)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 import os 
+from utils.utils import get_viewcone
 
 class Environment(ABC):
 
@@ -47,6 +48,8 @@ class Environment(ABC):
         camera_pose = get_link_pose(self.robot, 13)
         camera_matrix = get_camera_matrix(width, height, fx, fy)
         image_data = get_image_at_pose(camera_pose, camera_matrix)
+        viewcone = get_viewcone(camera_matrix=camera_matrix, color=RGBA(1, 1, 0, 0.2))
+        set_pose(viewcone, camera_pose)
 
         return image_data[0], image_data[1]
         
