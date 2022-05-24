@@ -58,6 +58,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     </plugin>
   </gazebo>
   <!-- Modification -->
+  <material name="Black">
+    <color rgba="0.2 0.2 0.2 1.0"/>
+  </material>
+  <material name="Gray">
+    <color rgba="0.3 0.3 0.3 1.0"/>
+  </material>
   <link name="world_link"/>
   <link name="base_link_0"/>
   <link name="base_link_1"/>
@@ -105,6 +111,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_components/collision/vector_base_collision.stl"/>
       </geometry>
+      <material name="Gray" />
     </visual>
   </link>
   <gazebo reference="base_chassis_link">
@@ -134,6 +141,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_components/collision/movo_fixed_body_collision.stl"/>
       </geometry>
+      <material name="Gray" />
     </visual>
   </link>
   <gazebo reference="linear_actuator_fixed_link">
@@ -152,6 +160,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_components/collision/movo_upper_body_collision.stl"/>
       </geometry>
+      <material name="Gray" />
     </visual>
     <collision>
       <geometry>
@@ -206,6 +215,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <box size="0.1 0.1 0.1"/>
       </geometry>
+      <material name="Gray" />
     </visual>
     <collision>
       <geometry>
@@ -254,6 +264,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <box size="0.1 0.1 0.1"/>
       </geometry>
+      <material name="Gray" />
     </visual>
     <collision>
       <geometry>
@@ -302,6 +313,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/pan_tilt/collision/pan_tilt_base.stl"/>
       </geometry>
+      <material name="Gray" />
     </visual>
     <collision>
       <geometry>
@@ -335,6 +347,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/pan_tilt/collision/pan_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -369,6 +382,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/pan_tilt/collision/tilt_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -396,6 +410,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/sensors/collision/kinect_one_collision.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -486,6 +501,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_body/movo_lower_body.dae"/>
       </geometry>
+      <material name="Gray" />
     </visual>
   </link>
   <joint name="upper_body_joint" type="fixed">
@@ -504,6 +520,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_body/movo_upper_body.dae"/>
       </geometry>
+      <material name="Gray" />
     </visual>
   </link>
   <joint name="mid_body_joint" type="prismatic">
@@ -526,6 +543,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/movo_body/movo_mid_body.dae"/>
       </geometry>
+      <material name="Gray" />
     </visual>
   </link>
   <gazebo reference="mid_body_link">
@@ -551,6 +569,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/base.stl"/>
       </geometry>
+      <material name="Gray" />
     </visual>
     <collision>
       <geometry>
@@ -585,6 +604,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/shoulder_7dof.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -619,6 +639,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/arm_half_1.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -653,6 +674,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/arm_half_2.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -687,6 +709,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/forearm_7dof.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -713,6 +736,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/wrist_spherical_1.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -747,6 +771,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/wrist_spherical_2.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -781,6 +806,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/kinova_actuator_gearing.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -888,6 +914,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/base.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -922,6 +949,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/shoulder_7dof.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -956,6 +984,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/arm_half_1.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -990,6 +1019,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/arm_half_2.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1024,6 +1054,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/forearm_7dof.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1050,6 +1081,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/wrist_spherical_1.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1084,6 +1116,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/wrist_spherical_2.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1118,6 +1151,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/jaco/collision/kinova_actuator_gearing.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1225,6 +1259,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/kinova_robotiq_coupler.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1254,6 +1289,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_base_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1293,6 +1329,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_knuckle_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1317,6 +1354,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_knuckle_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1351,6 +1389,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_finger_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1375,6 +1414,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_finger_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1415,6 +1455,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_inner_knuckle_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1439,6 +1480,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_inner_knuckle_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1479,6 +1521,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_finger_tip_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1503,6 +1546,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/robotiq/collision/robotiq_85_finger_tip_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1575,6 +1619,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/kg3_base_link.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1608,6 +1653,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1642,6 +1688,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1676,6 +1723,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_knuckle.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1707,6 +1755,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1738,6 +1787,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
@@ -1769,6 +1819,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       <geometry>
         <mesh filename="package://movo_description/meshes/manipulation/kinova_grippers/collision/finger_tip.stl"/>
       </geometry>
+      <material name="Black" />
     </visual>
     <collision>
       <geometry>
