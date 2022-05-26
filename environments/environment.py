@@ -3,7 +3,7 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert,
                                                     pixel_from_point, AABB, BLUE, RED, link_from_name, aabb_contains_point, 
-                                                    get_aabb, RGBA)
+                                                    get_aabb, RGBA, get_all_links)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud, get_viewcone
@@ -12,8 +12,8 @@ import os
 import numpy as np
 from collections import namedtuple
 
-GRID_HEIGHT = 0.1 # Height of the visibility and occupancy grids
-GRID_RESOLUTION = 0.2 # Grid resolutions
+GRID_HEIGHT = 2 # Height of the visibility and occupancy grids
+GRID_RESOLUTION = 0.1 # Grid resolutions
 
 LIGHT_GREY = RGBA(0.7, 0.7, 0.7, 1)
 
@@ -34,6 +34,7 @@ class Environment(ABC):
         stats = {"success": True}
         return stats
 
+
     def update_occupancy(self, camera_image, **kwargs):
             relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
                 if aabb_contains_point(lp.point, self.room.aabb)
@@ -41,6 +42,7 @@ class Environment(ABC):
             for labeled_point in relevant_cloud:
                 point = labeled_point.point
                 self.occupancy_grid.add_point(point)
+
 
     def update_visibility(self, camera_pose, camera_image):
         surface_aabb = self.visibility_grid.aabb
@@ -58,6 +60,7 @@ class Environment(ABC):
                     grid.set_free(voxel)
         return grid
        
+
     def setup_visibility_grid(self):
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
@@ -70,6 +73,7 @@ class Environment(ABC):
             
         self.visibility_grid = grid
 
+
     def setup_occupancy_grid(self):
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
@@ -79,10 +83,12 @@ class Environment(ABC):
         )
         self.occupancy_grid = grid
 
+
     def set_defaults(self, robot):
         joints, values = zip(*[(joint_from_name(robot, k), v) for k, v in DEFAULT_JOINTS.items()])
         set_joint_positions(robot, joints, values)
         
+
     def setup_robot(self):
         MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
         MOVO_PATH = os.path.abspath(MOVO_URDF)
@@ -91,6 +97,7 @@ class Environment(ABC):
         self.set_defaults(robot_body)
         return robot_body
 
+
     def plot_grids(self, visibility=False, occupancy=False):
         with LockRenderer():
             p.removeAllUserDebugItems()
@@ -98,6 +105,7 @@ class Environment(ABC):
                 self.visibility_grid.draw_intervals()
             if(occupancy):
                 self.occupancy_grid.draw_intervals()
+
 
     def get_robot_vision(self):
         """
@@ -114,8 +122,8 @@ class Environment(ABC):
 
         camera_matrix = get_camera_matrix(width, height, fx, fy)
         image_data = get_image_at_pose(camera_pose, camera_matrix)
-        viewcone = get_viewcone(camera_matrix=camera_matrix, color=RGBA(1, 1, 0, 0.2))
-        set_pose(viewcone, camera_pose)
+        #viewcone = get_viewcone(camera_matrix=camera_matrix, color=RGBA(1, 1, 0, 0.2))
+        #set_pose(viewcone, camera_pose)
         camera_image = get_image_at_pose(camera_pose, camera_matrix)
 
         return camera_pose, camera_image
@@ -140,3 +148,10 @@ class Environment(ABC):
 
     def create_pillar(self, width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
         return  create_box(w=width, l=length, h=height, color=color, **kwargs)
+
+    def check_state_collision(self, joints, q):
+        set_joint_positions(self.robot, joints, q)
+        if self.occupancy_grid.get_affected([self.robot], True):
+            return True
+        return False
+        

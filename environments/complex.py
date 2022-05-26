@@ -8,6 +8,7 @@ import math
 import pybullet as p
 import numpy as np
    
+
 class Complex(Environment):
     def __init__(self):
         super(Complex, self).__init__()
@@ -15,11 +16,13 @@ class Complex(Environment):
         self.start = [0, 0, 0]
         self.goal = [2, -4, np.pi/2] # TODO: Create separate class for configuration space
 
+
     def disconnect(self):
         try:
             p.disconnect()
         except:
             pass
+
 
     def setup(self):
 

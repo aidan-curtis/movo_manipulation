@@ -11,6 +11,7 @@ from pybullet_planning.pybullet_tools.utils import (dimensions_from_camera_matri
 
 LabeledPoint = namedtuple("LabeledPoint", ["point", "color", "label"])
 
+
 def get_pointcloud_from_camera_image(camera_image):
     rgb, depth, _, _, _ = camera_image
 
