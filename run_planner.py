@@ -1,8 +1,10 @@
 import argparse
 from planners.random_search import RandomSearch
+from planners.a_star_search import AStarSearch
 from environments.empty import Empty
 from environments.complex import Complex
 from environments.work_tradeoff import WorkTradeoff
+from environments.side_path import SidePath
 import pickle 
 from datetime import datetime
 import os
@@ -11,8 +13,12 @@ import matplotlib.pyplot as plt
 import open3d as o3d
 
 
-PLANNERS = {"random_search": RandomSearch}
-ENVIRONMENTS = {"empty": Empty, "complex": Complex, "work_tradeoff": WorkTradeoff}
+PLANNERS = {"random_search": RandomSearch,
+            "a_star": AStarSearch}
+ENVIRONMENTS = {"empty": Empty,
+                "complex": Complex, 
+                "work_tradeoff": WorkTradeoff,
+                "side_path": SidePath}
 RESULTS_DIR = "./results"
 
 def get_args():
