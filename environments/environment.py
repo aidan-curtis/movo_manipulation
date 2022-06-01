@@ -3,7 +3,7 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert,
                                                     pixel_from_point, AABB, BLUE, RED, link_from_name, aabb_contains_point, 
-                                                    get_aabb, RGBA, get_all_links)
+                                                    get_aabb, RGBA, get_all_links, get_aabb, aabb_contains_aabb)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud, get_viewcone
@@ -143,7 +143,9 @@ class Environment(ABC):
         set_pose(wall_3, Pose(point=Point(y=center[1], x=center[0]+width/2+wall_thickness/2, z=wall_height/2)))
         wall_4 = self.create_pillar(length=length, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_4, Pose(point=Point(y=center[1], x=center[0]-(width/2+wall_thickness/2), z=wall_height/2)))
-        return Room([wall_1, wall_2, wall_3, wall_4], [floor], get_aabb(floor))
+        aabb = AABB(lower = (center[0]-width/2.0, center[1]-length/2.0, 0.05),
+                    upper = (center[0]+width/2.0, center[1]+length/2.0, 0 + GRID_HEIGHT))
+        return Room([wall_1, wall_2, wall_3, wall_4], [floor], aabb)
 
 
     def create_pillar(self, width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
@@ -153,5 +155,14 @@ class Environment(ABC):
         set_joint_positions(self.robot, joints, q)
         if self.occupancy_grid.get_affected([self.robot], True):
             return True
+
+
+        # Check for the robot being inside the room. Disable later when replanning
+        # with occupancy grid
+        lower1, upper1 = get_aabb(self.robot)
+        lower2, upper2 = self.room.aabb
+        intersect = np.less_equal(lower2[0:2], lower1[0:2]).all() and np.less_equal(upper1[0:2], upper2[0:2]).all()
+        if intersect == False:
+            return True
+
         return False
-        

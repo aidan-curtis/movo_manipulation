@@ -1,6 +1,7 @@
 import argparse
 from planners.random_search import RandomSearch
 from planners.a_star_search import AStarSearch
+from planners.rrt import RRT
 from environments.empty import Empty
 from environments.complex import Complex
 from environments.work_tradeoff import WorkTradeoff
@@ -14,7 +15,8 @@ import open3d as o3d
 
 
 PLANNERS = {"random_search": RandomSearch,
-            "a_star": AStarSearch}
+            "a_star": AStarSearch,
+            "rrt": RRT}
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
                 "work_tradeoff": WorkTradeoff,

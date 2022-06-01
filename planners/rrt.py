@@ -6,9 +6,9 @@ from itertools import product
 import time
 
 
-class RandomSearch(Planner):
+class RRT(Planner):
     def __init__(self):
-        super(RandomSearch, self).__init__()
+        super(RRT, self).__init__()
         self.step_size = [0.05, np.pi/18]
 
     def get_plan(self, environment):

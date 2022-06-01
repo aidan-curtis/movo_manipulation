@@ -1,6 +1,6 @@
 from environments.environment import Environment
 
-from pybullet_planning.pybullet_tools.utils import create_box, TAN
+from pybullet_planning.pybullet_tools.utils import create_box, TAN, LockRenderer
 import pybullet as p
   
 
@@ -24,8 +24,10 @@ class Empty(Environment):
         p.connect(p.GUI)
 
         self.robot = self.setup_robot()
-        self.room = self.create_closed_room(length=6, width=6)
+
+        with LockRenderer():
+            self.room = self.create_closed_room(length=6, width=6)
 
 
-        self.setup_occupancy_grid()
-        self.setup_visibility_grid()
+            self.setup_occupancy_grid()
+            self.setup_visibility_grid()

@@ -26,7 +26,7 @@ DEFAULT_JOINTS = {
         "left_wrist_spherical_1_joint": -0.4464001271835176,
         "left_wrist_spherical_2_joint": 1.8807062523185454,
         "left_wrist_3_joint": 1.859177258066345,
-        "right_shoulder_pan_joint": -2.15,
+        "right_shoulder_pan_joint": -2.25,
         "right_shoulder_lift_joint": 1.5555300221621264,
         "right_arm_half_joint": -0.3052025219808243,
         "right_elbow_joint": 1.2316691272680973,
