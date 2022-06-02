@@ -166,3 +166,36 @@ class Environment(ABC):
             return True
 
         return False
+
+
+    def check_collision_in_path(self, joints, q_init, q_final, resolution=0.1):
+        set_joint_positions(self.robot, joints, q_init)
+        qs = divide_path_on_resol(q_init, q_final, resolution)
+        for q in qs:
+            for link in get_all_links(self.robot):
+                aabb = get_aabb(self.robot, link)
+                aabb = AABB(lower=[aabb[0][0] + (q[0]-q_init[0]), aabb[0][1] + (q[1]-q_init[1]), aabb[0][2]],
+                            upper=[aabb[1][0] + (q[0]-q_init[0]), aabb[1][1] + (q[1]-q_init[1]), aabb[1][2]])
+                for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
+                    if self.occupancy_grid.is_occupied(voxel) == True:
+                        return True
+
+        return False
+
+
+def divide_path_on_resol(q_init, q_final, step_size):
+    dirn = np.array(q_final[0:2]) - np.array(q_init[0:2])
+    length = np.linalg.norm(dirn)
+    dirn = (dirn / length) * min(step_size, length)
+
+    path = [q_init]
+    i = 0
+    while True:
+        new_vex = (path[-1][0]+dirn[0], path[-1][1]+dirn[1], q_init[2])
+        path.append(new_vex)
+        if distance(new_vex, q_final) < step_size:
+            path.append(q_final)
+            return path
+
+def distance(vex1, vex2):
+    return ((vex1[0] - vex2[0])**2 + (vex1[1]-vex2[1])**2)**0.5
