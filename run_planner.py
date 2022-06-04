@@ -6,6 +6,7 @@ from environments.empty import Empty
 from environments.complex import Complex
 from environments.work_tradeoff import WorkTradeoff
 from environments.side_path import SidePath
+from environments.single_movable import SingleMovable
 import pickle 
 from datetime import datetime
 import os
@@ -16,7 +17,8 @@ PLANNERS = {"random_search": RandomSearch,
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
                 "work_tradeoff": WorkTradeoff,
-                "side_path": SidePath}
+                "side_path": SidePath,
+                "single_movable": SingleMovable}
 RESULTS_DIR = "./results"
 
 def get_args():
@@ -34,7 +36,7 @@ def get_args():
         "-e",
         "--env",
         type=str,
-        default="side_path",
+        default="single_movable",
         help="Environment to run the planner in",
         choices=list(ENVIRONMENTS.keys())
     )

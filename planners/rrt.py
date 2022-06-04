@@ -16,8 +16,9 @@ class RRT(Planner):
     def get_path(self, start, goal, env, vis=False):
         with LockRenderer():
             graph = self.rrt(start, goal, env, n_iter=self.RRT_ITERS)
-            final_path = dijkstra(graph) if graph.success else None
-            final_path = self.adjust_angles(final_path, start, goal)
+            if(not graph.success):
+                return None
+            final_path = self.adjust_angles(dijkstra(graph), start, goal)
         if(vis):
             plot(graph, path=final_path)
 
@@ -42,6 +43,9 @@ class RRT(Planner):
 
         while(not complete):
             final_path = self.get_path(current_q, env.goal, env)
+            if(final_path is None):
+                print("No path to goal :(")
+                break
             current_q, complete = self.execute_path(final_path, env)
 
         wait_if_gui()
@@ -53,11 +57,12 @@ class RRT(Planner):
             # Get updated occupancy grid at each step
             _, image_data = env.get_robot_vision()
             env.update_occupancy(image_data)
-            # env.plot_grids(visibility=False, occupancy=True)
+            
 
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:
                 if(env.check_conf_collision(next_qi)):
+                    env.plot_grids(visibility=False, occupancy=True)
                     return q, False
         return q, True
 
