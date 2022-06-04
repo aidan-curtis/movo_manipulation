@@ -9,10 +9,6 @@ from environments.side_path import SidePath
 import pickle 
 from datetime import datetime
 import os
-import numpy as np
-import matplotlib.pyplot as plt
-import open3d as o3d
-
 
 PLANNERS = {"random_search": RandomSearch,
             "a_star": AStarSearch,
@@ -28,7 +24,7 @@ def get_args():
     parser.add_argument(
         "-a",
         "--algo",
-        default="random_search",
+        default="rrt",
         type=str,
         help="Planning algorithm to run",
         choices=list(PLANNERS.keys())
@@ -38,7 +34,7 @@ def get_args():
         "-e",
         "--env",
         type=str,
-        default="empty",
+        default="side_path",
         help="Environment to run the planner in",
         choices=list(ENVIRONMENTS.keys())
     )

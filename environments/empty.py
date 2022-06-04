@@ -1,6 +1,6 @@
 from environments.environment import Environment
 
-from pybullet_planning.pybullet_tools.utils import create_box, TAN, LockRenderer
+from pybullet_planning.pybullet_tools.utils import LockRenderer
 import pybullet as p
   
 
@@ -8,8 +8,8 @@ class Empty(Environment):
     def __init__(self):
         super(Empty, self).__init__()
 
-        self.start = [0, 0]
-        self.goal = [0, 2] # TODO: Create separate class for configuration space
+        self.start = (0, 0, 0)
+        self.goal = (0, 1, 0) # TODO: Create separate class for configuration space
 
     def disconnect(self):
         try:

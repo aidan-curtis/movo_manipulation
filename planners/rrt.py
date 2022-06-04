@@ -1,10 +1,8 @@
 from planners.planner import Planner
-from utils.utils import get_pointcloud_from_camera_image
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions)
+from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, set_joint_positions)
 import numpy as np
-from itertools import product
 import time
-from collections import namedtuple, deque
+from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 
@@ -13,34 +11,55 @@ class RRT(Planner):
     def __init__(self):
         super(RRT, self).__init__()
         self.step_size = [0.05, np.pi/18]
+        self.RRT_ITERS = 5000
 
-    def get_plan(self, environment):
-        environment.setup()
+    def get_path(self, start, goal, env, vis=False):
+        with LockRenderer():
+            graph = self.rrt(start, goal, env, n_iter=self.RRT_ITERS)
+            final_path = dijkstra(graph) if graph.success else None
+            final_path = self.adjust_angles(final_path, start, goal)
+        if(vis):
+            plot(graph, path=final_path)
+
+        return final_path
+
+    def get_plan(self, env):
+        env.setup()
         
-        camera_pose, image_data = environment.get_robot_vision()
-        environment.update_visibility(camera_pose, image_data)
-        environment.update_occupancy(image_data)
+        camera_pose, image_data = env.get_robot_vision()
+        env.update_visibility(camera_pose, image_data)
+        env.update_occupancy(image_data)
 
-        environment.plot_grids(visibility=False, occupancy=True)
+        env.plot_grids(visibility=False, occupancy=True)
 
 
-        self.joints = [joint_from_name(environment.robot, "x"),
-                       joint_from_name(environment.robot, "y"),
-                       joint_from_name(environment.robot, "theta")]
+        self.joints = [joint_from_name(env.robot, "x"),
+                       joint_from_name(env.robot, "y"),
+                       joint_from_name(env.robot, "theta")]
 
-        start= (0,0,0)
-        goal = (5,1,0)
-        graph = self.rrt(start, goal, environment, n_iter=500)
-        final_path = dijkstra(graph) if graph.success else None
-        print(final_path)
-        plot(graph, path=final_path)
-        
-        final_path = self.adjust_angles(final_path, start, goal)
-        for q in final_path:
-            set_joint_positions(environment.robot, self.joints, q)
-            time.sleep(0.1)        
+
+        current_q, complete = env.start, False
+
+        while(not complete):
+            final_path = self.get_path(current_q, env.goal, env)
+            current_q, complete = self.execute_path(final_path, env)
+
         wait_if_gui()
 
+    def execute_path(self, path, env):
+        for qi, q in enumerate(path):
+            set_joint_positions(env.robot, self.joints, q)
+
+            # Get updated occupancy grid at each step
+            _, image_data = env.get_robot_vision()
+            env.update_occupancy(image_data)
+            # env.plot_grids(visibility=False, occupancy=True)
+
+            # Check if remaining path is collision free under the new occupancy grid
+            for next_qi in path[qi:]:
+                if(env.check_conf_collision(next_qi)):
+                    return q, False
+        return q, True
 
 
 
@@ -62,7 +81,7 @@ class RRT(Planner):
 
             new_vex = self.steer(near_vex, rand_vex)
 
-            if environment.check_collision_in_path(self.joints, near_vex, new_vex):
+            if environment.check_collision_in_path(near_vex, new_vex):
                 continue
 
 

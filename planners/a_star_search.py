@@ -1,11 +1,8 @@
 from planners.planner import Planner
-from utils.utils import get_pointcloud_from_camera_image
 from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions)
 import numpy as np
 from itertools import product
 import time
-import open3d as o3d
-
 
 class AStarSearch(Planner):
     def __init__(self):
@@ -26,8 +23,9 @@ class AStarSearch(Planner):
               joint_from_name(environment.robot, "y"),
               joint_from_name(environment.robot, "theta")]
 
-        start= (0,0,0)
-        goal = (5,1,0)
+        start = tuple(environment.start)
+        goal = tuple(environment.goal)
+
         final_path = self.search_Astar(start, goal, environment)
         final_path = self.adjust_angles(final_path, start, goal)
         print(final_path)

@@ -3,14 +3,15 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert,
                                                     pixel_from_point, AABB, BLUE, RED, link_from_name, aabb_contains_point, 
-                                                    get_aabb, RGBA, get_all_links, get_aabb, aabb_contains_aabb)
+                                                    get_aabb, RGBA, recenter_oobb, get_aabb)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
-from utils.utils import iterate_point_cloud, get_viewcone
+from utils.utils import iterate_point_cloud
 import pybullet as p
 import os 
 import numpy as np
 from collections import namedtuple
+from functools import cached_property
 
 GRID_HEIGHT = 2 # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.1 # Grid resolutions
@@ -111,20 +112,18 @@ class Environment(ABC):
         """
         Gets the rgb and depth image of the robot
         """
-        fx = 528.612
-        fy = 531.854
-        width = 960
-        height = 540
+        fx = 80
+        fy = 80
+        width = 128
+        height = 128
+        far = 100
 
         # 13 is the link of the optical frame of the rgb camera
         camera_link = link_from_name(self.robot, "kinect2_rgb_optical_frame")
         camera_pose = get_link_pose(self.robot, camera_link)
 
         camera_matrix = get_camera_matrix(width, height, fx, fy)
-        image_data = get_image_at_pose(camera_pose, camera_matrix)
-        #viewcone = get_viewcone(camera_matrix=camera_matrix, color=RGBA(1, 1, 0, 0.2))
-        #set_pose(viewcone, camera_pose)
-        camera_image = get_image_at_pose(camera_pose, camera_matrix)
+        camera_image = get_image_at_pose(camera_pose, camera_matrix, far=far)
 
         return camera_pose, camera_image
         
@@ -167,21 +166,26 @@ class Environment(ABC):
 
         return False
 
-
-    def check_collision_in_path(self, joints, q_init, q_final, resolution=0.1):
-        set_joint_positions(self.robot, joints, q_init)
-        qs = divide_path_on_resol(q_init, q_final, resolution)
-        for q in qs:
-            for link in get_all_links(self.robot):
-                aabb = get_aabb(self.robot, link)
-                aabb = AABB(lower=[aabb[0][0] + (q[0]-q_init[0]), aabb[0][1] + (q[1]-q_init[1]), aabb[0][2]],
-                            upper=[aabb[1][0] + (q[0]-q_init[0]), aabb[1][1] + (q[1]-q_init[1]), aabb[1][2]])
-                for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
-                    if self.occupancy_grid.is_occupied(voxel) == True:
-                        return True
-
+    def check_conf_collision(self, q):
+        aabb = self.centered_aabb
+        aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2]],
+                    upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2]])
+        for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
+            if self.occupancy_grid.is_occupied(voxel) == True:
+                return True
         return False
 
+    @cached_property
+    def centered_aabb(self):
+        centered_aabb, _ = recenter_oobb((get_aabb(self.robot), Pose()))
+        return centered_aabb
+
+    def check_collision_in_path(self, q_init, q_final, resolution=0.1):
+        qs = divide_path_on_resol(q_init, q_final, resolution)
+        for q in qs:
+            if(self.check_conf_collision(q)):
+                return True 
+        return False
 
 def divide_path_on_resol(q_init, q_final, step_size):
     dirn = np.array(q_final[0:2]) - np.array(q_init[0:2])

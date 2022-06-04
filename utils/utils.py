@@ -101,8 +101,9 @@ def iterate_image(camera_image, step_size=3, aabb=None, **kwargs):
 
 def custom_iterate_point_cloud(
     camera_image, iterator, min_depth=0.0, max_depth=float("inf"), **kwargs
-):
+):  
     rgb_image, depth_image = camera_image[:2]
+
     # depth_image = simulate_depth(depth_image)
     for pixel in iterator:
 

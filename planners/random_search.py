@@ -1,10 +1,6 @@
 from planners.planner import Planner
-from utils.utils import get_pointcloud_from_camera_image
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui)
 import numpy as np
-from itertools import product
-import time
-
 
 class RandomSearch(Planner):
     def __init__(self):
