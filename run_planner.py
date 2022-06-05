@@ -27,7 +27,7 @@ def get_args():
     parser.add_argument(
         "-a",
         "--algo",
-        default="snowplow",
+        default="rrt",
         type=str,
         help="Planning algorithm to run",
         choices=list(PLANNERS.keys())

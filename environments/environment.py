@@ -231,7 +231,7 @@ class Environment(ABC):
         if(not ignore_movable):
             for movable_box in self.movable_boxes:
                 if(aabb_overlap(movable_box.aabb, aabb)):
-                    return True
+                    return movable_box
         return False
 
     @cached_property
