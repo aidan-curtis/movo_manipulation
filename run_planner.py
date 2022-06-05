@@ -1,5 +1,5 @@
 import argparse
-from planners.random_search import RandomSearch
+from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
 from environments.empty import Empty
@@ -11,9 +11,10 @@ import pickle
 from datetime import datetime
 import os
 
-PLANNERS = {"random_search": RandomSearch,
+PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
             "rrt": RRT}
+
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
                 "work_tradeoff": WorkTradeoff,
@@ -26,7 +27,7 @@ def get_args():
     parser.add_argument(
         "-a",
         "--algo",
-        default="rrt",
+        default="snowplow",
         type=str,
         help="Planning algorithm to run",
         choices=list(PLANNERS.keys())
@@ -59,10 +60,10 @@ def write_results(args, statistics):
 if __name__=="__main__":
     args = get_args()
 
-    planner = PLANNERS[args.algo]()
     env = ENVIRONMENTS[args.env]()
+    planner = PLANNERS[args.algo](env)
 
-    plan = planner.get_plan(env)
+    plan = planner.get_plan()
     statistics = env.validate_plan(plan)
 
     #write_results(args, statistics)

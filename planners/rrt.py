@@ -1,21 +1,30 @@
 from planners.planner import Planner
 from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, set_joint_positions)
 import numpy as np
-import time
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 
 
 class RRT(Planner):
-    def __init__(self):
+    def __init__(self, env):
         super(RRT, self).__init__()
+
+        self.env = env
+        
+        # Setup the environment
+        self.env.setup()
+
         self.step_size = [0.05, np.pi/18]
         self.RRT_ITERS = 5000
 
-    def get_path(self, start, goal, env, vis=False):
+        self.joints = [joint_from_name(self.env.robot, "x"),
+                       joint_from_name(self.env.robot, "y"),
+                       joint_from_name(self.env.robot, "theta")]
+
+    def get_path(self, start, goal, vis=False, ignore_movable=False):
         with LockRenderer():
-            graph = self.rrt(start, goal, env, n_iter=self.RRT_ITERS)
+            graph = self.rrt(start, goal, n_iter=self.RRT_ITERS, ignore_movable=ignore_movable)
             if(not graph.success):
                 return None
             final_path = self.adjust_angles(dijkstra(graph), start, goal)
@@ -24,52 +33,46 @@ class RRT(Planner):
 
         return final_path
 
-    def get_plan(self, env):
-        env.setup()
+    def get_plan(self):
         
-        camera_pose, image_data = env.get_robot_vision()
-        env.update_visibility(camera_pose, image_data)
-        env.update_occupancy(image_data)
+        camera_pose, image_data = self.env.get_robot_vision()
+        self.env.update_visibility(camera_pose, image_data)
+        self.env.update_occupancy(image_data)
 
-        env.plot_grids(visibility=False, occupancy=True, movable=True)
-
-
-        self.joints = [joint_from_name(env.robot, "x"),
-                       joint_from_name(env.robot, "y"),
-                       joint_from_name(env.robot, "theta")]
+        self.env.plot_grids(visibility=False, occupancy=True, movable=True)
 
 
-        current_q, complete = env.start, False
+        current_q, complete = self.env.start, False
 
         while(not complete):
-            final_path = self.get_path(current_q, env.goal, env)
+            final_path = self.get_path(current_q, self.env.goal)
             if(final_path is None):
                 print("No path to goal :(")
                 break
-            current_q, complete = self.execute_path(final_path, env)
+            current_q, complete = self.execute_path(final_path)
 
         wait_if_gui()
 
-    def execute_path(self, path, env):
+    def execute_path(self, path):
         for qi, q in enumerate(path):
-            set_joint_positions(env.robot, self.joints, q)
+            set_joint_positions(self.env.robot, self.joints, q)
 
             # Get updated occupancy grid at each step
-            _, image_data = env.get_robot_vision()
-            env.update_occupancy(image_data)
-            env.update_movable_boxes(image_data)
+            _, image_data = self.env.get_robot_vision()
+            self.env.update_occupancy(image_data)
+            self.env.update_movable_boxes(image_data)
 
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:
-                if(env.check_conf_collision(next_qi)):
-                    env.plot_grids(visibility=False, occupancy=True, movable=True)
+                if(self.env.check_conf_collision(next_qi)):
+                    self.env.plot_grids(visibility=False, occupancy=True, movable=True)
                     return q, False
         return q, True
 
 
 
-    def rrt(self, start, goal, environment, n_iter=500, radius = 0.3, goal_bias=0.1):
-        lower, upper = environment.room.aabb
+    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1, ignore_movable=False):
+        lower, upper = self.env.room.aabb
         G = Graph(start, goal)
 
         for _ in range(n_iter):
@@ -79,14 +82,14 @@ class RRT(Planner):
             else:
                 rand_vex = self.sample(lower, upper)
 
-            near_vex, near_idx = G.nearest_vex(rand_vex, environment, self.joints)
+            near_vex, near_idx = G.nearest_vex(rand_vex, self.env, self.joints)
 
             if near_vex is None:
                 continue
 
             new_vex = self.steer(near_vex, rand_vex)
 
-            if environment.check_collision_in_path(near_vex, new_vex):
+            if self.env.check_collision_in_path(near_vex, new_vex, ignore_movable=ignore_movable):
                 continue
 
 

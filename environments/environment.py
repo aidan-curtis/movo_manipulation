@@ -7,7 +7,7 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert,
                                                     pixel_from_point, AABB, BLUE, RED, YELLOW, link_from_name, aabb_contains_point, 
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb, aabb_from_points, OOBB,
-                                                    aabb_union, aabb_overlap)
+                                                    aabb_union, aabb_overlap, scale_aabb)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -71,6 +71,13 @@ class Environment(ABC):
         for b in new_boxes+self.movable_boxes:
             if not (test_in(b, overlapped_boxes)):
                 all_new_boxes.append(b)
+
+        
+        # Remove points from occupancy/visibility grids
+        for movable_box in all_new_boxes:
+            for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(movable_box.aabb, 1.2)):
+                self.occupancy_grid.set_free(voxel)
+                self.visibility_grid.set_free(voxel)
 
         self.movable_boxes = all_new_boxes
 
@@ -213,13 +220,18 @@ class Environment(ABC):
 
         return False
 
-    def check_conf_collision(self, q):
+    def check_conf_collision(self, q, ignore_movable=False):
         aabb = self.centered_aabb
         aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2]],
                     upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2]])
         for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
             if self.occupancy_grid.is_occupied(voxel) == True:
                 return True
+                
+        if(not ignore_movable):
+            for movable_box in self.movable_boxes:
+                if(aabb_overlap(movable_box.aabb, aabb)):
+                    return True
         return False
 
     @cached_property
@@ -227,10 +239,10 @@ class Environment(ABC):
         centered_aabb, _ = recenter_oobb((get_aabb(self.robot), Pose()))
         return centered_aabb
 
-    def check_collision_in_path(self, q_init, q_final, resolution=0.1):
+    def check_collision_in_path(self, q_init, q_final, resolution=0.1, ignore_movable=False):
         qs = divide_path_on_resol(q_init, q_final, resolution)
         for q in qs:
-            if(self.check_conf_collision(q)):
+            if(self.check_conf_collision(q, ignore_movable=ignore_movable)):
                 return True 
         return False
 
