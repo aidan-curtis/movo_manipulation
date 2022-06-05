@@ -29,7 +29,6 @@ class SingleMovable(Environment):
         self.robot = self.setup_robot()
 
         with LockRenderer():
-            self.room = self.create_closed_room(length=6, width=10, center = [3,2])
 
 
             blocking_box = create_box(3,4,1, mass=1, color=BROWN)
@@ -55,6 +54,7 @@ class SingleMovable(Environment):
                 )
             )
 
+            self.room = self.create_closed_room(length=6, width=10, center = [3,2], movable_obstacles=[blocking_chair])
 
-            self.setup_occupancy_grid()
-            self.setup_visibility_grid()
+
+            self.setup_grids()

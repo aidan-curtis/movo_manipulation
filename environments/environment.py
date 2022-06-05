@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
+from cProfile import label
+from email.policy import default
+from re import L
 from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet, set_joint_positions, joint_from_name, Point, Pose, 
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert,
-                                                    pixel_from_point, AABB, BLUE, RED, link_from_name, aabb_contains_point, 
-                                                    get_aabb, RGBA, recenter_oobb, get_aabb)
+                                                    pixel_from_point, AABB, BLUE, RED, YELLOW, link_from_name, aabb_contains_point, 
+                                                    get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb, aabb_from_points, OOBB,
+                                                    aabb_union, aabb_overlap)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -12,6 +16,7 @@ import os
 import numpy as np
 from collections import namedtuple
 from functools import cached_property
+from collections import defaultdict
 
 GRID_HEIGHT = 2 # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.1 # Grid resolutions
@@ -19,7 +24,7 @@ GRID_RESOLUTION = 0.1 # Grid resolutions
 LIGHT_GREY = RGBA(0.7, 0.7, 0.7, 1)
 
 
-Room = namedtuple("Room", ["walls", "floors", "aabb"])
+Room = namedtuple("Room", ["walls", "floors", "aabb", "movable_obstacles"])
 
 class Environment(ABC):
 
@@ -35,6 +40,39 @@ class Environment(ABC):
         stats = {"success": True}
         return stats
 
+    def update_movable_boxes(self, camera_image, **kwargs):
+        relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
+                if aabb_contains_point(lp.point, self.room.aabb)
+            ]
+
+        object_points = defaultdict(list)
+        for labeled_point in relevant_cloud:
+            if(labeled_point.label[0] in self.room.movable_obstacles):
+                object_points[labeled_point.label[0]].append(labeled_point.point)
+
+        # Convert point clusters into bounding boxes
+        new_boxes = []
+        for _, points in object_points.items():
+            new_boxes.append(OOBB(aabb_from_points(points), Pose()))
+        
+        # If a bounding box intersects with an existing one, replace with union
+        def test_in(box, boxes):
+            return any([(all(np.array(box.aabb.upper) == np.array(q.aabb.upper)) and 
+                         all(np.array(box.aabb.lower) == np.array(q.aabb.lower))) for q in boxes])
+                         
+        all_new_boxes = []
+        overlapped_boxes = []
+        for movable_box in self.movable_boxes:
+            for new_box in new_boxes:
+                if(aabb_overlap(movable_box.aabb, new_box.aabb)):
+                    all_new_boxes.append(OOBB(aabb_union([movable_box.aabb, new_box.aabb]), Pose()))
+                    overlapped_boxes.append(movable_box)
+                    overlapped_boxes.append(new_box)
+        for b in new_boxes+self.movable_boxes:
+            if not (test_in(b, overlapped_boxes)):
+                all_new_boxes.append(b)
+
+        self.movable_boxes = all_new_boxes
 
     def update_occupancy(self, camera_image, **kwargs):
             relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
@@ -61,6 +99,10 @@ class Environment(ABC):
                     grid.set_free(voxel)
         return grid
        
+    def setup_grids(self):
+        self.setup_occupancy_grid()
+        self.setup_visibility_grid()
+        self.setup_movable_boxes()
 
     def setup_visibility_grid(self):
         resolutions = GRID_RESOLUTION * np.ones(3)
@@ -74,7 +116,6 @@ class Environment(ABC):
             
         self.visibility_grid = grid
 
-
     def setup_occupancy_grid(self):
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
@@ -84,6 +125,8 @@ class Environment(ABC):
         )
         self.occupancy_grid = grid
 
+    def setup_movable_boxes(self):
+        self.movable_boxes = []
 
     def set_defaults(self, robot):
         joints, values = zip(*[(joint_from_name(robot, k), v) for k, v in DEFAULT_JOINTS.items()])
@@ -99,13 +142,17 @@ class Environment(ABC):
         return robot_body
 
 
-    def plot_grids(self, visibility=False, occupancy=False):
+    def plot_grids(self, visibility=False, occupancy=False, movable=False):
         with LockRenderer():
             p.removeAllUserDebugItems()
             if(visibility):
                 self.visibility_grid.draw_intervals()
             if(occupancy):
                 self.occupancy_grid.draw_intervals()
+            if(movable):
+                for movable_box in self.movable_boxes:
+                    draw_oobb(movable_box, color=YELLOW)
+
 
 
     def get_robot_vision(self):
@@ -123,12 +170,12 @@ class Environment(ABC):
         camera_pose = get_link_pose(self.robot, camera_link)
 
         camera_matrix = get_camera_matrix(width, height, fx, fy)
-        camera_image = get_image_at_pose(camera_pose, camera_matrix, far=far)
+        camera_image = get_image_at_pose(camera_pose, camera_matrix, far=far, segment=True)
 
         return camera_pose, camera_image
         
 
-    def create_closed_room(self, length, width, center=[0,0], wall_height=2):
+    def create_closed_room(self, length, width, center=[0,0], wall_height=2, movable_obstacles=[]):
 
         floor = self.create_pillar(width=width, length=length, color=TAN)
         set_pose(floor, Pose(Point(x=center[0], y=center[1])))
@@ -144,7 +191,7 @@ class Environment(ABC):
         set_pose(wall_4, Pose(point=Point(y=center[1], x=center[0]-(width/2+wall_thickness/2), z=wall_height/2)))
         aabb = AABB(lower = (center[0]-width/2.0, center[1]-length/2.0, 0.05),
                     upper = (center[0]+width/2.0, center[1]+length/2.0, 0 + GRID_HEIGHT))
-        return Room([wall_1, wall_2, wall_3, wall_4], [floor], aabb)
+        return Room([wall_1, wall_2, wall_3, wall_4], [floor], aabb, movable_obstacles)
 
 
     def create_pillar(self, width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
