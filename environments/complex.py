@@ -58,8 +58,7 @@ class Complex(Environment):
                 )
             )
 
-            self.setup_occupancy_grid()
-            self.setup_visibility_grid()
+            self.setup_grids()
             
 
     def create_room(self):

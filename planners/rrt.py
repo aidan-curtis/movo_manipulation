@@ -39,6 +39,7 @@ class RRT(Planner):
         self.env.update_visibility(camera_pose, image_data)
         self.env.update_occupancy(image_data)
 
+
         self.env.plot_grids(visibility=False, occupancy=True, movable=True)
 
 
@@ -58,9 +59,10 @@ class RRT(Planner):
             set_joint_positions(self.env.robot, self.joints, q)
 
             # Get updated occupancy grid at each step
-            _, image_data = self.env.get_robot_vision()
+            camera_pose, image_data = self.env.get_robot_vision()
             self.env.update_occupancy(image_data)
             self.env.update_movable_boxes(image_data)
+            #self.env.update_visibility(camera_pose, image_data)
 
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:

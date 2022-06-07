@@ -29,5 +29,4 @@ class Empty(Environment):
             self.room = self.create_closed_room(length=6, width=6)
 
 
-            self.setup_occupancy_grid()
-            self.setup_visibility_grid()
+            self.setup_grids()

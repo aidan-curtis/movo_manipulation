@@ -39,6 +39,4 @@ class SidePath(Environment):
                     )
                 )
 
-
-            self.setup_occupancy_grid()
-            self.setup_visibility_grid()
+            self.setup_grids()

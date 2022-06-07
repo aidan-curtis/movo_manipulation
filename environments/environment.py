@@ -36,9 +36,9 @@ class Environment(ABC):
         """
             Validates that the plan is collision-free, scores the trajectory cost
         """
-
         stats = {"success": True}
         return stats
+
 
     def update_movable_boxes(self, camera_image, **kwargs):
         relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
@@ -72,7 +72,6 @@ class Environment(ABC):
             if not (test_in(b, overlapped_boxes)):
                 all_new_boxes.append(b)
 
-        
         # Remove points from occupancy/visibility grids
         for movable_box in all_new_boxes:
             for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(movable_box.aabb, 1.2)):

@@ -24,6 +24,4 @@ class WorkTradeoff(Environment):
         self.robot = self.setup_robot()
         self.room = self.create_closed_room(length=6, width=6)
 
-
-        self.setup_occupancy_grid()
-        self.setup_visibility_grid()    
+        self.setup_grids()
