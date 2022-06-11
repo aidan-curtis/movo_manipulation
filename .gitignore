@@ -4,3 +4,5 @@ temp_meshes/
 dataset/*
 results/*
 **/.DS_Store
+scrap_code.py
+.idea/

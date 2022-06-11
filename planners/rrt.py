@@ -4,6 +4,7 @@ import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
+import random
 
 
 class RRT(Planner):
@@ -22,13 +23,21 @@ class RRT(Planner):
                        joint_from_name(self.env.robot, "y"),
                        joint_from_name(self.env.robot, "theta")]
 
-    def get_path(self, start, goal, vis=False, ignore_movable=False):
+        self.movable_handles = []
+
+    def get_path(self, start, goal, vis=False, ignore_movable=False, attached_object=None, moving_backwards=False):
         with LockRenderer():
-            graph = self.rrt(start, goal, n_iter=self.RRT_ITERS, ignore_movable=ignore_movable)
+            graph = self.rrt(start, goal, n_iter=self.RRT_ITERS, ignore_movable=ignore_movable, attached_object=attached_object, moving_backwards=moving_backwards)
+            if moving_backwards:
+                plot(graph)
             if(not graph.success):
                 return None
-            final_path = self.adjust_angles(dijkstra(graph), start, goal)
-        if(vis):
+
+            if not moving_backwards:
+                final_path = self.env.adjust_angles(dijkstra(graph), start, goal)
+            else:
+                final_path = self.env.adjust_angles_backwards(dijkstra(graph), start, goal)
+        if vis:
             plot(graph, path=final_path)
 
         return final_path
@@ -40,7 +49,7 @@ class RRT(Planner):
         self.env.update_occupancy(image_data)
 
 
-        self.env.plot_grids(visibility=False, occupancy=True, movable=True)
+        self.movable_handles = self.env.plot_grids(visibility=False, occupancy=True, movable=True)
 
 
         current_q, complete = self.env.start, False
@@ -54,7 +63,7 @@ class RRT(Planner):
 
         wait_if_gui()
 
-    def execute_path(self, path):
+    def execute_path(self, path, ignore_movable=False):
         for qi, q in enumerate(path):
             set_joint_positions(self.env.robot, self.joints, q)
 
@@ -62,18 +71,17 @@ class RRT(Planner):
             camera_pose, image_data = self.env.get_robot_vision()
             self.env.update_occupancy(image_data)
             self.env.update_movable_boxes(image_data)
-            #self.env.update_visibility(camera_pose, image_data)
+            self.env.update_visibility(camera_pose, image_data)
 
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:
-                if(self.env.check_conf_collision(next_qi)):
-                    self.env.plot_grids(visibility=False, occupancy=True, movable=True)
+                if(self.env.check_conf_collision(next_qi, ignore_movable=ignore_movable)):
+                    self.movable_handles = self.env.plot_grids(visibility=True, occupancy=True, movable=True)
                     return q, False
         return q, True
 
 
-
-    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1, ignore_movable=False):
+    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1, ignore_movable=False, attached_object=None, moving_backwards=False):
         lower, upper = self.env.room.aabb
         G = Graph(start, goal)
 
@@ -83,17 +91,23 @@ class RRT(Planner):
                 rand_vex = goal
             else:
                 rand_vex = self.sample(lower, upper)
+            new_vex = None
 
-            near_vex, near_idx = G.nearest_vex(rand_vex, self.env, self.joints)
+            for k in range(5):
+                near_vex, near_idx = G.nearest_vex(rand_vex, self.env, self.joints,k=k)
 
-            if near_vex is None:
+                if near_vex is None:
+                    break
+
+                new_vex = self.steer(near_vex, rand_vex)
+
+                if self.env.check_collision_in_path(near_vex, new_vex, ignore_movable=ignore_movable, attached_object=attached_object, moving_backwards=moving_backwards):
+                    new_vex = None
+                else:
+                    break
+
+            if new_vex is None or near_vex is None:
                 continue
-
-            new_vex = self.steer(near_vex, rand_vex)
-
-            if self.env.check_collision_in_path(near_vex, new_vex, ignore_movable=ignore_movable):
-                continue
-
 
             new_idx = G.add_vex(new_vex)
             dist = distance(new_vex, near_vex)
@@ -117,6 +131,16 @@ class RRT(Planner):
         return (rand_x, rand_y, rand_t)
 
 
+    def sample_from_vision(self):
+        resolution = self.env.visibility_grid.resolutions
+        free_points = [(free[0]*resolution[0], free[1]*resolution[1])
+                       for free in self.env.viewed_voxels]
+        point = random.choice(free_points)
+        rand_t = np.random.uniform(0, 2 * np.pi)
+
+        return (point[0], point[1], rand_t)
+
+
     def steer(self, source_vex, dest_vex, step_size=0.1):
         dirn = np.array(dest_vex[0:2]) - np.array(source_vex[0:2])
         length = np.linalg.norm(dirn)
@@ -124,23 +148,6 @@ class RRT(Planner):
 
         new_vex = (source_vex[0]+dirn[0], source_vex[1]+dirn[1], dest_vex[2])
         return new_vex
-
-
-    def adjust_angles(self, path, start, goal):
-        final_path = [start]
-        for i in range(1, len(path)):
-            beg = path[i-1]
-            end = path[i]
-
-            delta_x = end[0] - beg[0]
-            delta_y = end[1] - beg[1]
-            theta = np.arctan2(delta_y, delta_x)
-
-            final_path.append((beg[0], beg[1], theta))
-            final_path.append((end[0], end[1], theta))
-        final_path.append(goal)
-        return final_path
-
 
 
 class Graph:
@@ -174,23 +181,14 @@ class Graph:
         self.neighbors[idx2].append((idx1, cost))
 
 
-    def nearest_vex(self, vex, environment, joints):
-        near_vex = None
-        near_idx = None
-        min_dist = np.inf
+    def nearest_vex(self, vex, environment, joints, k=0):
+        neighbors = [(distance(v,vex), v, idx) for idx,v in enumerate(self.vertices)]
+        neighbors = sorted(neighbors, key=lambda x: x[0])
 
-        for idx, v in enumerate(self.vertices):
-            #if environment.check_collision_in_path(joints, v, vex):
-            #    continue
+        if len(neighbors) < k+1:
+            return None, None
 
-            dist = distance(v, vex)
-
-            if dist < min_dist:
-                near_vex = v
-                near_idx = idx
-                min_dist = dist
-
-        return near_vex, near_idx
+        return neighbors[k][1], neighbors[k][2]
 
 
 def distance(vex1, vex2):

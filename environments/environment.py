@@ -2,12 +2,13 @@ from abc import ABC, abstractmethod
 from cProfile import label
 from email.policy import default
 from re import L
-from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet, set_joint_positions, joint_from_name, Point, Pose, 
+from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet, set_joint_positions, joint_from_name, Point, Pose, Euler,
                                                     set_pose, create_box, TAN, get_link_pose,
-                                                    get_camera_matrix, get_image_at_pose, tform_point, invert,
-                                                    pixel_from_point, AABB, BLUE, RED, YELLOW, link_from_name, aabb_contains_point, 
+                                                    get_camera_matrix, get_image_at_pose, tform_point, invert, multiply,
+                                                    pixel_from_point, AABB, OOBB, BLUE, RED, YELLOW, link_from_name, aabb_contains_point,
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb, aabb_from_points, OOBB,
-                                                    aabb_union, aabb_overlap, scale_aabb)
+                                                    aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
+                                                    remove_handles, get_pose, draw_aabb, wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -38,6 +39,12 @@ class Environment(ABC):
         """
         stats = {"success": True}
         return stats
+
+    def get_object_from_oobb(self, oobb):
+        for object in self.objects:
+            if aabb_contains_point(get_aabb_center(oobb.aabb), get_aabb(object)):
+                return object
+        return None
 
 
     def update_movable_boxes(self, camera_image, **kwargs):
@@ -102,6 +109,7 @@ class Environment(ABC):
                 r, c = pixel
                 depth = camera_image.depthPixels[r, c]
                 if distance <= depth:
+                    self.viewed_voxels.append(voxel)
                     grid.set_free(voxel)
         return grid
        
@@ -113,7 +121,9 @@ class Environment(ABC):
     def setup_visibility_grid(self):
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
-        surface_aabb = self.room.aabb
+        #surface_aabb = self.room.aabb
+        surface_aabb = AABB(lower=self.room.aabb.lower,
+                             upper=(self.room.aabb.upper[0], self.room.aabb.upper[1], 0.1))
         grid = VoxelGrid(
             resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
         )
@@ -149,6 +159,7 @@ class Environment(ABC):
 
 
     def plot_grids(self, visibility=False, occupancy=False, movable=False):
+        movable_handles = []
         with LockRenderer():
             p.removeAllUserDebugItems()
             if(visibility):
@@ -157,8 +168,10 @@ class Environment(ABC):
                 self.occupancy_grid.draw_intervals()
             if(movable):
                 for movable_box in self.movable_boxes:
-                    draw_oobb(movable_box, color=YELLOW)
+                    new_movable_handles = draw_oobb(movable_box, color=YELLOW)
+                    movable_handles += new_movable_handles
 
+        return movable_handles
 
 
     def get_robot_vision(self):
@@ -221,8 +234,9 @@ class Environment(ABC):
 
     def check_conf_collision(self, q, ignore_movable=False):
         aabb = self.centered_aabb
-        aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2]],
-                    upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2]])
+        z_centering = aabb[1][2]
+        aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2]+z_centering],
+                    upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2]+z_centering])
         for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
             if self.occupancy_grid.is_occupied(voxel) == True:
                 return True
@@ -233,17 +247,140 @@ class Environment(ABC):
                     return movable_box
         return False
 
+    def check_conf_collision_w_attached(self, q, attached_object, grasp, ignore_movable=False):
+        robot_pose = Pose(
+            point=Point(x=q[0], y=q[1]),
+            euler=Euler(yaw=q[2]),
+        )
+        obj_pose = multiply(robot_pose, grasp)
+        aabb = self.centered_aabb
+        midz = (aabb[1][2])
+        robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
+                          upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2] + midz])
+
+        aabb_object, _ = recenter_oobb((get_aabb(attached_object), obj_pose))
+        object_aabb = AABB(lower=[aabb_object[0][0] + obj_pose[0][0], aabb_object[0][1] + obj_pose[0][1],
+                                  aabb_object[0][2] + obj_pose[0][2]],
+                           upper=[aabb_object[1][0] + obj_pose[0][0], aabb_object[1][1] + obj_pose[0][1],
+                                  aabb_object[1][2] + obj_pose[0][2]])
+        for aabb in [robot_aabb, object_aabb]:
+            for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
+                if self.occupancy_grid.is_occupied(voxel):
+                    return True
+            for voxel in self.visibility_grid.voxels_from_aabb(aabb):
+                if self.visibility_grid.is_occupied(voxel):
+                    return True
+            if not ignore_movable:
+                for movable_box in self.movable_boxes:
+                    if(aabb_overlap(movable_box.aabb, aabb)):
+                        return movable_box
+        return False
+
+
     @cached_property
     def centered_aabb(self):
-        centered_aabb, _ = recenter_oobb((get_aabb(self.robot), Pose()))
+        # TODO: Using the base aabb for simplicity. Change later
+        centered_aabb, _ = recenter_oobb((get_aabb(self.robot, link=4), Pose()))
         return centered_aabb
 
-    def check_collision_in_path(self, q_init, q_final, resolution=0.1, ignore_movable=False):
+
+    def check_collision_in_path(self, q_init, q_final, resolution=0.1, ignore_movable=False, attached_object=None, moving_backwards=False):
         qs = divide_path_on_resol(q_init, q_final, resolution)
+        if not moving_backwards:
+            qs = self.adjust_angles(qs, q_init, q_final)
+        else:
+            qs= self.adjust_angles_backwards(qs, q_init, q_final)
         for q in qs:
-            if(self.check_conf_collision(q, ignore_movable=ignore_movable)):
-                return True 
+            if attached_object is not None:
+                if self.check_conf_collision_w_attached(q, attached_object[0], attached_object[1], ignore_movable=True):
+                    return True
+            else:
+                if self.check_conf_collision(q, ignore_movable=ignore_movable):
+                    return True
         return False
+
+
+    def move_robot_with_att_obj(self, movable_obj, q, attachment_grasp, joints):
+        robot_pose = Pose(
+            point=Point(x=q[0], y=q[1]),
+            euler=Euler(yaw=q[2]),
+        )
+        obj_pose = multiply(robot_pose, attachment_grasp)
+        set_joint_positions(self.robot, joints, q)
+        set_pose(movable_obj, obj_pose)
+
+
+    def adjust_angles(self, path, start, goal):
+        final_path = [start]
+        for i in range(1, len(path)):
+            beg = path[i-1]
+            end = path[i]
+
+            delta_x = end[0] - beg[0]
+            delta_y = end[1] - beg[1]
+            theta = np.arctan2(delta_y, delta_x)
+
+            final_path.append((beg[0], beg[1], theta))
+            final_path.append((end[0], end[1], theta))
+        final_path.append(goal)
+        return final_path
+
+
+    def adjust_angles_backwards(self, path, start, goal):
+        final_path = [goal]
+        for i in range(len(path)-1, 0, -1):
+            beg = path[i]
+            end = path[i-1]
+
+            delta_x = end[0] - beg[0]
+            delta_y = end[1] - beg[1]
+            theta = np.arctan2(delta_y, delta_x)
+
+            final_path.append((beg[0], beg[1], theta))
+            final_path.append((end[0], end[1], theta))
+        final_path.append(start)
+        final_path.reverse()
+        return final_path
+
+
+    def move_movable_object(self, movable_object_oobb, q, grasp):
+        print(self.remove_movable_object(movable_object_oobb))
+        wait_if_gui()
+        aabb = self.centered_aabb
+        midz = (aabb[1][2])
+        robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
+                          upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2] + midz])
+        robot_pose = Pose(
+            point=Point(x=q[0], y=q[1]),
+            euler=Euler(yaw=q[2]),
+        )
+        obj_pose = multiply(robot_pose, grasp)
+        aabb_object, _ = recenter_oobb((get_aabb(obstructing_object), obj_pose))
+        object_aabb = AABB(
+            lower=[aabb_object[0][0] + obj_pose[0][0], aabb_object[0][1] + obj_pose[0][1],
+                   aabb_object[0][2] + obj_pose[0][2]],
+            upper=[aabb_object[1][0] + obj_pose[0][0], aabb_object[1][1] + obj_pose[0][1],
+                   aabb_object[1][2] + obj_pose[0][2]])
+        self.env.movable_boxes.append(OOBB(aabb=object_aabb, pose=Pose()))
+        return True
+
+
+    def remove_movable_object(self, movable_object_oobb):
+        for i in range(len(self.movable_boxes)):
+            good = True
+            for j in range(len(self.movable_boxes[i])):
+                print(self.movable_boxes[i][j])
+                print(movable_object_oobb[j])
+                if self.movable_boxes[i][j] != movable_object_oobb[j]:
+                    good = False
+                    break
+            if good:
+                self.movable_boxes.pop(i)
+                return True
+        return False
+
+
+
 
 def divide_path_on_resol(q_init, q_final, step_size):
     dirn = np.array(q_final[0:2]) - np.array(q_init[0:2])

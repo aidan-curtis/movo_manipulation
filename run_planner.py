@@ -61,8 +61,8 @@ if __name__=="__main__":
     args = get_args()
 
     env = ENVIRONMENTS[args.env]()
-    planner = PLANNERS[args.algo](env)
 
+    planner = PLANNERS[args.algo](env)
     plan = planner.get_plan()
     statistics = env.validate_plan(plan)
 

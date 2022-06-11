@@ -13,6 +13,8 @@ class SingleMovable(Environment):
 
         self.start = (0, 0, 0)
         self.goal = (6, 2, 0) # TODO: Create separate class for configuration space
+        self.objects = []
+        self.viewed_voxels = []
 
     def disconnect(self):
         try:
@@ -30,30 +32,30 @@ class SingleMovable(Environment):
         with LockRenderer():
 
 
-            blocking_box = create_box(3,4,1, mass=1, color=BROWN)
+            blocking_box = create_box(3,4.5,1, mass=1, color=BROWN)
             set_pose(blocking_box,
                     Pose(point=Point(
                             x=3,
-                            y=1,
+                            y=1.25,
                             z=1/2,
                         )
                     )
                 )
 
             blocking_chair = load_model(
-                    "../models/partnet_mobility/179/mobility.urdf", scale=0.4
+                    "../models/partnet_mobility/179/mobility.urdf", scale=0.5
                 )
+
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=3,
-                        y=4,
-                        z=0.345,
+                        y=4.25,
+                        z=0.42,
                     )
                 )
             )
 
             self.room = self.create_closed_room(length=6, width=10, center = [3,2], movable_obstacles=[blocking_chair])
-
-
+            self.objects += [blocking_box, blocking_chair]
             self.setup_grids()

@@ -13,8 +13,8 @@ class Complex(Environment):
     def __init__(self):
         super(Complex, self).__init__()
 
-        self.start = [0, 0, 0]
-        self.goal = [2, -4, np.pi/2] # TODO: Create separate class for configuration space
+        self.start = (0, 0, 0)
+        self.goal = (2, -4, np.pi/2) # TODO: Create separate class for configuration space
 
 
     def disconnect(self):
@@ -33,11 +33,12 @@ class Complex(Environment):
 
         with LockRenderer():
 
-            self.room = self.create_room()
-
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.4
                 )
+            self.room = self.create_room(movable_obstacles=[blocking_chair])
+
+
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
@@ -61,7 +62,7 @@ class Complex(Environment):
             self.setup_grids()
             
 
-    def create_room(self):
+    def create_room(self, movable_obstacles=[]):
         width = 6
         length = 4
         wall_height = 2
@@ -104,6 +105,6 @@ class Complex(Environment):
         floors = [floor1, floor2]
         aabb = AABB(lower=(center[0]-width/2.0, center[1]-length/2.0-hall_length, 0.05), 
                     upper=(center[0]+width/2.0, center[1]+length/2.0, 0 + GRID_HEIGHT))
-        room = Room(walls, floors, aabb)
+        room = Room(walls, floors, aabb, movable_obstacles)
 
         return room
