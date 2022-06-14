@@ -122,7 +122,6 @@ class Snowplow(RRT):
 
         self.env.plot_grids(visibility=True, occupancy=True, movable=True)
         current_q, complete = self.env.start, False
-        handling_complete = False
 
         while(not complete):
             final_path = self.get_path(current_q, self.env.goal)
@@ -132,40 +131,48 @@ class Snowplow(RRT):
                 if(relaxed_final_path is None):
                     print("No indirect path to goal :(")
                 else:
-                    obstruction = self.find_path_obstruction(relaxed_final_path)
-                    obstructing_object = self.env.get_object_from_oobb(obstruction)
-                    print("Found path through obstacle: " + str(obstruction))
-                    attach_grasp = None
-                    while (not handling_complete):
-                        attach_path, attach_grasp = self.get_attachment_path(obstruction, current_q)
-                        print("Found an attachment path")
-                        current_q, handling_complete = self.execute_path(attach_path)
-                        self.env.plot_grids(visibility=True, occupancy=True, movable=True)
-                    print("Successfully attached to the object")
-
                     handling_complete = False
-                    while (not handling_complete):
+                    while not handling_complete:
                         obstruction = self.find_path_obstruction(relaxed_final_path)
-                        print("Finding placement path")
-                        #self.env.visualize_attachment_bbs(obstruction, current_q, attach_grasp)
-                        self.env.remove_movable_object(obstruction)
-                        detach_path = self.get_detachment_path(obstruction, current_q, attach_grasp)
-                        print("Found placement path. Looking if we can reach goal from there")
-                        newly_added = self.env.place_movable_object(obstruction, detach_path[-1], attach_grasp)
-                        remaining_path = self.get_path(detach_path[-1], self.env.goal)
-                        if remaining_path is None:
-                            print("No direct path to goal. Looking for path through movable object")
-                            remaining_path = self.get_path(detach_path[-1], self.env.goal, ignore_movable=True, forced_obj_coll=[newly_added])
-                            self.env.remove_movable_object(newly_added)
+                        obstructing_object = self.env.get_object_from_oobb(obstruction)
+                        print("Found path through obstacle: " + str(obstruction))
+                        attach_grasp = None
+                        while (not handling_complete):
+                            obstruction = self.find_path_obstruction(relaxed_final_path)
+                            attach_path, attach_grasp = self.get_attachment_path(obstruction, current_q)
+                            print("Found an attachment path")
+                            current_q, handling_complete = self.execute_path(attach_path)
+                            self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+                        print("Successfully attached to the object")
+
+                        handling_complete = False
+                        while (not handling_complete):
+                            is_relaxed = False
+                            obstruction = self.find_path_obstruction(relaxed_final_path)
+                            print("Finding placement path")
+                            #self.env.visualize_attachment_bbs(obstruction, current_q, attach_grasp)
+                            self.env.remove_movable_object(obstruction)
+                            detach_path = self.get_detachment_path(obstruction, current_q, attach_grasp)
+                            print("Found placement path. Looking if we can reach goal from there")
+                            newly_added = self.env.place_movable_object(obstruction, detach_path[-1], attach_grasp)
+                            remaining_path = self.get_path(detach_path[-1], self.env.goal)
                             if remaining_path is None:
-                                print("Failed to retrieve path to goal, trying again")
-                                self.env.movable_boxes.append(obstruction)
-                                continue
-                        self.env.remove_movable_object(newly_added)
-                        print("We got it")
-                        current_q, handling_complete = self.execute_path_with_attached(detach_path, obstruction, attach_grasp)
-                        self.env.place_movable_object(obstruction, current_q, attach_grasp)
-                        self.env.plot_grids(occupancy=True, visibility=True, movable=True)
+                                print("No direct path to goal. Looking for path through movable object")
+                                remaining_path = self.get_path(detach_path[-1], self.env.goal, ignore_movable=True, forced_obj_coll=[newly_added])
+                                self.env.remove_movable_object(newly_added)
+                                is_relaxed = True
+                                if remaining_path is None:
+                                    print("Failed to retrieve path to goal, trying again")
+                                    self.env.movable_boxes.append(obstruction)
+                                    continue
+                            self.env.remove_movable_object(newly_added)
+                            print("We got it")
+                            current_q, handling_complete = self.execute_path_with_attached(detach_path, obstruction, attach_grasp)
+                            self.env.place_movable_object(obstruction, current_q, attach_grasp)
+                            self.env.plot_grids(occupancy=True, visibility=True, movable=True)
+                        if is_relaxed:
+                            handling_complete = False
+                            relaxed_final_path = remaining_path
             else:
                 current_q, complete = self.execute_path(final_path)
 

@@ -35,7 +35,8 @@ class RRT(Planner):
                              forced_object_coll=forced_obj_coll,
                              attached_object=attached_object,
                              moving_backwards=moving_backwards)
-            #plot(graph, self.env)
+            #if moving_backwards:
+            #    plot(graph, self.env)
             if(not graph.success):
                 return None
 
