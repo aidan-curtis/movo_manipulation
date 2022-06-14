@@ -1,9 +1,11 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, set_joint_positions)
+from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, set_joint_positions,
+                                                    get_aabb, get_pose)
 import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
+from matplotlib.patches import Rectangle
 import random
 
 
@@ -25,11 +27,15 @@ class RRT(Planner):
 
         self.movable_handles = []
 
-    def get_path(self, start, goal, vis=False, ignore_movable=False, attached_object=None, moving_backwards=False):
+    def get_path(self, start, goal, vis=False, ignore_movable=False, forced_obj_coll=[],
+                 attached_object=None, moving_backwards=False):
         with LockRenderer():
-            graph = self.rrt(start, goal, n_iter=self.RRT_ITERS, ignore_movable=ignore_movable, attached_object=attached_object, moving_backwards=moving_backwards)
-            if moving_backwards:
-                plot(graph)
+            graph = self.rrt(start, goal, n_iter=self.RRT_ITERS,
+                             ignore_movable=ignore_movable,
+                             forced_object_coll=forced_obj_coll,
+                             attached_object=attached_object,
+                             moving_backwards=moving_backwards)
+            #plot(graph, self.env)
             if(not graph.success):
                 return None
 
@@ -76,12 +82,14 @@ class RRT(Planner):
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:
                 if(self.env.check_conf_collision(next_qi, ignore_movable=ignore_movable)):
-                    self.movable_handles = self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+                    self.env.plot_grids(visibility=True, occupancy=True, movable=True)
                     return q, False
         return q, True
 
 
-    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1, ignore_movable=False, attached_object=None, moving_backwards=False):
+    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1,
+            ignore_movable=False, forced_object_coll=[], attached_object=None, moving_backwards=False):
+
         lower, upper = self.env.room.aabb
         G = Graph(start, goal)
 
@@ -93,7 +101,7 @@ class RRT(Planner):
                 rand_vex = self.sample(lower, upper)
             new_vex = None
 
-            for k in range(5):
+            for k in range(3):
                 near_vex, near_idx = G.nearest_vex(rand_vex, self.env, self.joints,k=k)
 
                 if near_vex is None:
@@ -101,7 +109,11 @@ class RRT(Planner):
 
                 new_vex = self.steer(near_vex, rand_vex)
 
-                if self.env.check_collision_in_path(near_vex, new_vex, ignore_movable=ignore_movable, attached_object=attached_object, moving_backwards=moving_backwards):
+                if self.env.check_collision_in_path(near_vex, new_vex,
+                                                    ignore_movable=ignore_movable,
+                                                    forced_object_coll=forced_object_coll,
+                                                    attached_object=attached_object,
+                                                    moving_backwards=moving_backwards):
                     new_vex = None
                 else:
                     break
@@ -195,7 +207,7 @@ def distance(vex1, vex2):
     return ((vex1[0] - vex2[0])**2 + (vex1[1]-vex2[1])**2)**0.5
 
 
-def plot(G, path=None):
+def plot(G, env, path=None):
     '''
     Plot RRT, obstacles and shortest path
     '''
@@ -205,11 +217,31 @@ def plot(G, path=None):
 
     ax.scatter(px, py, c='cyan')
     ax.scatter(G.startpos[0], G.startpos[1], c='black')
-    ax.scatter(G.endpos[0], G.endpos[1], c='black')
+    ax.scatter(G.endpos[0], G.endpos[1], c='red')
 
     lines = [(G.vertices[edge[0]][0:2], G.vertices[edge[1]][0:2]) for edge in G.edges]
     lc = mc.LineCollection(lines, colors='green', linewidths=2)
     ax.add_collection(lc)
+
+    room = Rectangle((env.room.aabb.lower[0:2]),
+                     env.room.aabb.upper[0] - env.room.aabb.lower[0],
+                     env.room.aabb.upper[1] - env.room.aabb.lower[1],
+                     fc="none", color="red", linewidth=0.1)
+    ax.add_patch(room)
+
+    # Not taking rotations into account
+    for obstacle in env.static_objects + env.movable_boxes:
+        color = "red"
+        if isinstance(obstacle, int):
+            aabb = get_aabb(obstacle)
+        else:
+            aabb = obstacle.aabb
+            color = "yellow"
+        ax.add_patch(Rectangle((aabb.lower[0], aabb.lower[1]),
+                     aabb.upper[0] - aabb.lower[0],
+                     aabb.upper[1] - aabb.lower[1],
+                     color=color, linewidth=0.1))
+
 
     if path is not None:
         paths = [(path[i][0:2], path[i+1][0:2]) for i in range(len(path)-1)]

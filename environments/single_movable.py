@@ -58,4 +58,5 @@ class SingleMovable(Environment):
 
             self.room = self.create_closed_room(length=6, width=10, center = [3,2], movable_obstacles=[blocking_chair])
             self.objects += [blocking_box, blocking_chair]
+            self.static_objects = [blocking_box]
             self.setup_grids()

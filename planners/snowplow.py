@@ -33,7 +33,7 @@ class Snowplow(RRT):
         """
         for q in path:
             collision = self.env.check_conf_collision(q)
-            if collision:
+            if collision != False and collision != True:
                 return collision
 
     def directed_pose_generator(self, pose, **kwargs):
@@ -50,7 +50,8 @@ class Snowplow(RRT):
 
 
     def sample_attachment_base_confs(self, robot, movable_box):
-        base_generator = self.base_sample_gen(get_pose(movable_box))
+        pose = Pose(point=get_aabb_center(movable_box.aabb))
+        base_generator = self.base_sample_gen(pose)
         for base_conf in base_generator:
             base_conf = base_conf[0:3]
             return base_conf
@@ -62,7 +63,8 @@ class Snowplow(RRT):
             point=Point(x=base_conf[0], y=base_conf[1]),
             euler=Euler(yaw=base_conf[2]),
         )
-        base_grasp = multiply(invert(base_pose), get_pose(movable_box))
+        obj_pose = Pose(point=get_aabb_center(movable_box.aabb))
+        base_grasp = multiply(invert(base_pose), obj_pose)
 
         return base_conf, base_grasp
 
@@ -79,7 +81,7 @@ class Snowplow(RRT):
         detachment_path = None
         while (detachment_path is None):
             detachment_q = self.sample_placement_poses(movable_box, grasp)
-            detachment_path = self.get_path(q, detachment_q, ignore_movable=True, attached_object=(movable_box, grasp), moving_backwards=True)
+            detachment_path = self.get_path(q, detachment_q, attached_object=(movable_box, grasp), moving_backwards=True)
         return detachment_path
 
 
@@ -93,13 +95,32 @@ class Snowplow(RRT):
         return attachment_path, attachment_grasp
 
 
+    def execute_path_with_attached(self, path, movable_object_oobb, grasp, ignore_movable=False):
+        movable_obj = self.env.get_object_from_oobb(movable_object_oobb)
+        for qi, q in enumerate(path):
+            self.env.move_robot_with_att_obj(movable_obj, q, grasp, self.joints)
+
+            # Get updated occupancy grid at each step
+            camera_pose, image_data = self.env.get_robot_vision()
+            self.env.update_occupancy(image_data, ignore_obstacles=[movable_obj])
+            self.env.update_movable_boxes(image_data, ignore_obstacles=[movable_obj])
+            self.env.update_visibility(camera_pose, image_data)
+
+            # Check if remaining path is collision free under the new occupancy grid
+            for next_qi in path[qi:]:
+                if self.env.check_conf_collision_w_attached(q, movable_object_oobb, grasp):
+                    self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+                    return q, False
+        return q, True
+
+
     def get_plan(self):
         
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data)
         self.env.update_occupancy(image_data)
 
-        self.movable_handles = self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+        self.env.plot_grids(visibility=True, occupancy=True, movable=True)
         current_q, complete = self.env.start, False
         handling_complete = False
 
@@ -116,7 +137,7 @@ class Snowplow(RRT):
                     print("Found path through obstacle: " + str(obstruction))
                     attach_grasp = None
                     while (not handling_complete):
-                        attach_path, attach_grasp = self.get_attachment_path(obstructing_object, current_q)
+                        attach_path, attach_grasp = self.get_attachment_path(obstruction, current_q)
                         print("Found an attachment path")
                         current_q, handling_complete = self.execute_path(attach_path)
                         self.env.plot_grids(visibility=True, occupancy=True, movable=True)
@@ -126,17 +147,29 @@ class Snowplow(RRT):
                     while (not handling_complete):
                         obstruction = self.find_path_obstruction(relaxed_final_path)
                         print("Finding placement path")
-                        detach_path = self.get_detachment_path(obstructing_object, current_q, attach_grasp)
-                        print("Found placement path")
-                        self.env.move_movable_object(obstruction, detach_path[-1], attach_grasp)
-
-                        remaining_path = self.get_path(q, self.env.goal)
-                        print(remaining_path)
-                        wait_if_gui()
-                        current_q, handling_complete = self.execute_path(detach_path, ignore_movable=True)
-                    wait_if_gui()
+                        #self.env.visualize_attachment_bbs(obstruction, current_q, attach_grasp)
+                        self.env.remove_movable_object(obstruction)
+                        detach_path = self.get_detachment_path(obstruction, current_q, attach_grasp)
+                        print("Found placement path. Looking if we can reach goal from there")
+                        newly_added = self.env.place_movable_object(obstruction, detach_path[-1], attach_grasp)
+                        remaining_path = self.get_path(detach_path[-1], self.env.goal)
+                        if remaining_path is None:
+                            print("No direct path to goal. Looking for path through movable object")
+                            remaining_path = self.get_path(detach_path[-1], self.env.goal, ignore_movable=True, forced_obj_coll=[newly_added])
+                            self.env.remove_movable_object(newly_added)
+                            if remaining_path is None:
+                                print("Failed to retrieve path to goal, trying again")
+                                self.env.movable_boxes.append(obstruction)
+                                continue
+                        self.env.remove_movable_object(newly_added)
+                        print("We got it")
+                        current_q, handling_complete = self.execute_path_with_attached(detach_path, obstruction, attach_grasp)
+                        self.env.place_movable_object(obstruction, current_q, attach_grasp)
+                        self.env.plot_grids(occupancy=True, visibility=True, movable=True)
             else:
                 current_q, complete = self.execute_path(final_path)
 
+        self.env.plot_grids(occupancy=True, visibility=True, movable=True)
+        print("Reached the goal")
         wait_if_gui()
     

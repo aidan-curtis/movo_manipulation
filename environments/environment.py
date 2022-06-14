@@ -47,14 +47,14 @@ class Environment(ABC):
         return None
 
 
-    def update_movable_boxes(self, camera_image, **kwargs):
+    def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
         relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
                 if aabb_contains_point(lp.point, self.room.aabb)
             ]
 
         object_points = defaultdict(list)
         for labeled_point in relevant_cloud:
-            if(labeled_point.label[0] in self.room.movable_obstacles):
+            if(labeled_point.label[0] in self.room.movable_obstacles and labeled_point.label[0] not in ignore_obstacles):
                 object_points[labeled_point.label[0]].append(labeled_point.point)
 
         # Convert point clusters into bounding boxes
@@ -87,13 +87,14 @@ class Environment(ABC):
 
         self.movable_boxes = all_new_boxes
 
-    def update_occupancy(self, camera_image, **kwargs):
+    def update_occupancy(self, camera_image, ignore_obstacles=[], **kwargs):
             relevant_cloud = [ lp for lp in iterate_point_cloud(camera_image, **kwargs)
                 if aabb_contains_point(lp.point, self.room.aabb)
             ]
             for labeled_point in relevant_cloud:
-                point = labeled_point.point
-                self.occupancy_grid.add_point(point)
+                if labeled_point.label[0] not in ignore_obstacles:
+                    point = labeled_point.point
+                    self.occupancy_grid.add_point(point)
 
 
     def update_visibility(self, camera_pose, camera_image):
@@ -168,10 +169,8 @@ class Environment(ABC):
                 self.occupancy_grid.draw_intervals()
             if(movable):
                 for movable_box in self.movable_boxes:
-                    new_movable_handles = draw_oobb(movable_box, color=YELLOW)
-                    movable_handles += new_movable_handles
-
-        return movable_handles
+                    draw_oobb(movable_box, color=YELLOW)
+        return
 
 
     def get_robot_vision(self):
@@ -232,19 +231,23 @@ class Environment(ABC):
 
         return False
 
-    def check_conf_collision(self, q, ignore_movable=False):
+    def check_conf_collision(self, q, ignore_movable=False, forced_object_coll=[]):
         aabb = self.centered_aabb
         z_centering = aabb[1][2]
         aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2]+z_centering],
                     upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2]+z_centering])
-        for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
-            if self.occupancy_grid.is_occupied(voxel) == True:
-                return True
-                
+
         if(not ignore_movable):
             for movable_box in self.movable_boxes:
                 if(aabb_overlap(movable_box.aabb, aabb)):
                     return movable_box
+        for movable_box in forced_object_coll:
+            if (aabb_overlap(movable_box.aabb, aabb)):
+                return movable_box
+        for voxel in self.occupancy_grid.voxels_from_aabb(aabb):
+            if self.occupancy_grid.is_occupied(voxel) == True:
+                return True
+
         return False
 
     def check_conf_collision_w_attached(self, q, attached_object, grasp, ignore_movable=False):
@@ -258,7 +261,7 @@ class Environment(ABC):
         robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
                           upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2] + midz])
 
-        aabb_object, _ = recenter_oobb((get_aabb(attached_object), obj_pose))
+        aabb_object, _ = recenter_oobb((attached_object.aabb, obj_pose))
         object_aabb = AABB(lower=[aabb_object[0][0] + obj_pose[0][0], aabb_object[0][1] + obj_pose[0][1],
                                   aabb_object[0][2] + obj_pose[0][2]],
                            upper=[aabb_object[1][0] + obj_pose[0][0], aabb_object[1][1] + obj_pose[0][1],
@@ -284,7 +287,9 @@ class Environment(ABC):
         return centered_aabb
 
 
-    def check_collision_in_path(self, q_init, q_final, resolution=0.1, ignore_movable=False, attached_object=None, moving_backwards=False):
+    def check_collision_in_path(self, q_init, q_final, resolution=0.1,
+                                ignore_movable=False, forced_object_coll=[],
+                                attached_object=None, moving_backwards=False):
         qs = divide_path_on_resol(q_init, q_final, resolution)
         if not moving_backwards:
             qs = self.adjust_angles(qs, q_init, q_final)
@@ -295,7 +300,7 @@ class Environment(ABC):
                 if self.check_conf_collision_w_attached(q, attached_object[0], attached_object[1], ignore_movable=True):
                     return True
             else:
-                if self.check_conf_collision(q, ignore_movable=ignore_movable):
+                if self.check_conf_collision(q, ignore_movable=ignore_movable, forced_object_coll=forced_object_coll):
                     return True
         return False
 
@@ -343,9 +348,7 @@ class Environment(ABC):
         return final_path
 
 
-    def move_movable_object(self, movable_object_oobb, q, grasp):
-        print(self.remove_movable_object(movable_object_oobb))
-        wait_if_gui()
+    def place_movable_object(self, movable_object_oobb, q, grasp):
         aabb = self.centered_aabb
         midz = (aabb[1][2])
         robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
@@ -355,30 +358,53 @@ class Environment(ABC):
             euler=Euler(yaw=q[2]),
         )
         obj_pose = multiply(robot_pose, grasp)
-        aabb_object, _ = recenter_oobb((get_aabb(obstructing_object), obj_pose))
+        aabb_object, _ = recenter_oobb((movable_object_oobb.aabb, obj_pose))
         object_aabb = AABB(
             lower=[aabb_object[0][0] + obj_pose[0][0], aabb_object[0][1] + obj_pose[0][1],
                    aabb_object[0][2] + obj_pose[0][2]],
             upper=[aabb_object[1][0] + obj_pose[0][0], aabb_object[1][1] + obj_pose[0][1],
                    aabb_object[1][2] + obj_pose[0][2]])
-        self.env.movable_boxes.append(OOBB(aabb=object_aabb, pose=Pose()))
-        return True
+        #draw_aabb(robot_aabb)
+        #draw_aabb(object_aabb)
+        new_object = OOBB(aabb=object_aabb, pose=Pose())
+        self.movable_boxes.append(new_object)
+        return new_object
 
 
     def remove_movable_object(self, movable_object_oobb):
+        remaining_boxes = []
         for i in range(len(self.movable_boxes)):
             good = True
-            for j in range(len(self.movable_boxes[i])):
-                print(self.movable_boxes[i][j])
-                print(movable_object_oobb[j])
-                if self.movable_boxes[i][j] != movable_object_oobb[j]:
-                    good = False
-                    break
-            if good:
-                self.movable_boxes.pop(i)
-                return True
+            if (abs(np.array(self.movable_boxes[i].aabb.lower) - np.array(movable_object_oobb.aabb.lower)) > 0.005).any():
+                remaining_boxes.append(self.movable_boxes[i])
+                good = False
+                break
+            if (abs(np.array(self.movable_boxes[i].aabb.upper) - np.array(movable_object_oobb.aabb.upper)) > 0.005).any():
+                remaining_boxes.append(self.movable_boxes[i])
+                good = False
+                break
+        self.movable_boxes = remaining_boxes
         return False
 
+    def visualize_attachment_bbs(self, movable_object_oobb, q, grasp):
+        aabb = self.centered_aabb
+        midz = (aabb[1][2])
+        robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
+                          upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2] + midz])
+        robot_pose = Pose(
+            point=Point(x=q[0], y=q[1]),
+            euler=Euler(yaw=q[2]),
+        )
+        obj_pose = multiply(robot_pose, grasp)
+        aabb_object, _ = recenter_oobb((movable_object_oobb.aabb, obj_pose))
+        object_aabb = AABB(
+            lower=[aabb_object[0][0] + obj_pose[0][0], aabb_object[0][1] + obj_pose[0][1],
+                   aabb_object[0][2] + obj_pose[0][2]],
+            upper=[aabb_object[1][0] + obj_pose[0][0], aabb_object[1][1] + obj_pose[0][1],
+                   aabb_object[1][2] + obj_pose[0][2]])
+        draw_aabb(robot_aabb)
+        draw_aabb(object_aabb)
+        return
 
 
 
