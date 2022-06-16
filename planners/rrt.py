@@ -102,7 +102,7 @@ class RRT(Planner):
                 rand_vex = self.sample(lower, upper)
             new_vex = None
 
-            for k in range(3):
+            for k in range(2):
                 near_vex, near_idx = G.nearest_vex(rand_vex, self.env, self.joints,k=k)
 
                 if near_vex is None:

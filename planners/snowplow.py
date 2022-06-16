@@ -108,7 +108,7 @@ class Snowplow(RRT):
 
             # Check if remaining path is collision free under the new occupancy grid
             for next_qi in path[qi:]:
-                if self.env.check_conf_collision_w_attached(q, movable_object_oobb, grasp):
+                if self.env.check_conf_collision_w_attached(next_qi, movable_object_oobb, grasp):
                     self.env.plot_grids(visibility=True, occupancy=True, movable=True)
                     return q, False
         return q, True

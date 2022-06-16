@@ -16,6 +16,8 @@ class Complex(Environment):
         self.start = (0, 0, 0)
         self.goal = (2, -4, np.pi/2) # TODO: Create separate class for configuration space
 
+        self.objects = []
+        self.viewed_voxels = []
 
     def disconnect(self):
         try:
@@ -58,7 +60,9 @@ class Complex(Environment):
                     )
                 )
             )
-
+            self.objects += [blocking_box, blocking_chair]
+            self.static_objects = [blocking_box]
+            self.centered_aabb = self.get_centered_aabb()
             self.setup_grids()
             
 

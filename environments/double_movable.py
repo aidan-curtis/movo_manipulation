@@ -72,4 +72,5 @@ class DoubleMovable(Environment):
             self.room = self.create_closed_room(length=6, width=10, center=[3, 2], movable_obstacles=[blocking_chair_1, blocking_chair_2])
             self.objects += [blocking_box, blocking_chair_1, blocking_chair_2]
             self.static_objects = [blocking_box]
+            self.centered_aabb = self.get_centered_aabb()
             self.setup_grids()

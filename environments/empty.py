@@ -10,6 +10,8 @@ class Empty(Environment):
 
         self.start = (0, 0, 0)
         self.goal = (0, 1, 0) # TODO: Create separate class for configuration space
+        self.objects = []
+        self.viewed_voxels = []
 
     def disconnect(self):
         try:
@@ -27,6 +29,8 @@ class Empty(Environment):
 
         with LockRenderer():
             self.room = self.create_closed_room(length=6, width=6)
-
-
             self.setup_grids()
+
+        self.objects += []
+        self.static_objects = []
+        self.centered_aabb = self.get_centered_aabb()

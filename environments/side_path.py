@@ -40,3 +40,6 @@ class SidePath(Environment):
                 )
 
             self.setup_grids()
+        self.centered_aabb = self.get_centered_aabb()
+        self.objects += [blocking_box]
+        self.static_objects = [blocking_box]

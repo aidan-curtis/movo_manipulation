@@ -280,24 +280,26 @@ class Environment(ABC):
         return False
 
 
-    @cached_property
-    def centered_aabb(self):
+    def get_centered_aabb(self):
         # TODO: Using the base aabb for simplicity. Change later
         centered_aabb, _ = recenter_oobb((get_aabb(self.robot, link=4), Pose()))
+        centered_aabb.lower[1] = centered_aabb.lower[0]
+        centered_aabb.upper[1] = centered_aabb.upper[0]
         return centered_aabb
 
 
     def check_collision_in_path(self, q_init, q_final, resolution=0.1,
                                 ignore_movable=False, forced_object_coll=[],
                                 attached_object=None, moving_backwards=False):
-        qs = divide_path_on_resol(q_init, q_final, resolution)
-        if not moving_backwards:
-            qs = self.adjust_angles(qs, q_init, q_final)
+        #qs = divide_path_on_resol(q_init, q_final, resolution)
+        qs = [q_init, q_final]
+        if moving_backwards:
+            qs = self.adjust_angles_backwards(qs, q_init, q_final)
         else:
-            qs= self.adjust_angles_backwards(qs, q_init, q_final)
+            qs = self.adjust_angles(qs, q_init, q_final)
         for q in qs:
             if attached_object is not None:
-                if self.check_conf_collision_w_attached(q, attached_object[0], attached_object[1], ignore_movable=True):
+                if self.check_conf_collision_w_attached(q, attached_object[0], attached_object[1], ignore_movable=False):
                     return True
             else:
                 if self.check_conf_collision(q, ignore_movable=ignore_movable, forced_object_coll=forced_object_coll):
@@ -348,6 +350,32 @@ class Environment(ABC):
         return final_path
 
 
+    def adjust_angles_backwards_experimental(self, path, start, goal):
+        angle_traversal = np.pi / 12
+        final_path = [goal]
+        for i in range(len(path) - 1, 0, -1):
+            beg = path[i]
+            end = path[i - 1]
+
+            delta_x = end[0] - beg[0]
+            delta_y = end[1] - beg[1]
+            theta = np.arctan2(delta_y, delta_x)
+
+            angle_diff = find_min_angle(beg[2], theta)
+            n_iters = int(abs(angle_diff / angle_traversal))
+            angle = final_path[-1][2]
+            if angle_diff < 0: angle_traversal *= -1
+            for e in range(n_iters):
+                angle += angle_traversal
+                final_path.append((beg[0], beg[1], angle))
+
+            final_path.append((beg[0], beg[1], theta))
+            final_path.append((end[0], end[1], theta))
+        final_path.append(start)
+        final_path.reverse()
+        return final_path
+
+
     def place_movable_object(self, movable_object_oobb, q, grasp):
         aabb = self.centered_aabb
         midz = (aabb[1][2])
@@ -375,11 +403,11 @@ class Environment(ABC):
         remaining_boxes = []
         for i in range(len(self.movable_boxes)):
             good = True
-            if (abs(np.array(self.movable_boxes[i].aabb.lower) - np.array(movable_object_oobb.aabb.lower)) > 0.005).any():
+            if (abs(np.array(self.movable_boxes[i].aabb.lower) - np.array(movable_object_oobb.aabb.lower)) > 0.01).any():
                 remaining_boxes.append(self.movable_boxes[i])
                 good = False
                 break
-            if (abs(np.array(self.movable_boxes[i].aabb.upper) - np.array(movable_object_oobb.aabb.upper)) > 0.005).any():
+            if (abs(np.array(self.movable_boxes[i].aabb.upper) - np.array(movable_object_oobb.aabb.upper)) > 0.01).any():
                 remaining_boxes.append(self.movable_boxes[i])
                 good = False
                 break
@@ -388,9 +416,9 @@ class Environment(ABC):
 
     def visualize_attachment_bbs(self, movable_object_oobb, q, grasp):
         aabb = self.centered_aabb
-        midz = (aabb[1][2])
-        robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + (q[1]), aabb[0][2] + midz],
-                          upper=[aabb[1][0] + q[0], aabb[1][1] + (q[1]), aabb[1][2] + midz])
+        midz = aabb[1][2]
+        robot_aabb = AABB(lower=[aabb[0][0] + q[0], aabb[0][1] + q[1], aabb[0][2] + midz],
+                          upper=[aabb[1][0] + q[0], aabb[1][1] + q[1], aabb[1][2] + midz])
         robot_pose = Pose(
             point=Point(x=q[0], y=q[1]),
             euler=Euler(yaw=q[2]),
@@ -424,3 +452,11 @@ def divide_path_on_resol(q_init, q_final, step_size):
 
 def distance(vex1, vex2):
     return ((vex1[0] - vex2[0])**2 + (vex1[1]-vex2[1])**2)**0.5
+
+def find_min_angle(beg, end):
+    if beg > np.pi:
+        beg = beg - 2*np.pi
+    if end > np.pi:
+        end = end - 2*np.pi
+
+    return ((end-beg) + np.pi) % (2*np.pi) - np.pi

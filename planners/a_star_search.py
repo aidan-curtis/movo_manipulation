@@ -1,37 +1,39 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions,
+                                                    draw_aabb, AABB)
 import numpy as np
 from itertools import product
 import time
 
 class AStarSearch(Planner):
-    def __init__(self):
+    def __init__(self, env):
         super(AStarSearch, self).__init__()
+        self.env = env
         self.step_size = [0.1, 0.1]
 
-    def get_plan(self, environment):
-        environment.setup()
+    def get_plan(self):
+        self.env.setup()
         
-        camera_pose, image_data = environment.get_robot_vision()
-        environment.update_visibility(camera_pose, image_data)
-        environment.update_occupancy(image_data)
+        camera_pose, image_data = self.env.get_robot_vision()
+        self.env.update_visibility(camera_pose, image_data)
+        self.env.update_occupancy(image_data)
 
-        environment.plot_grids(visibility=False, occupancy=True)
+        self.env.plot_grids(visibility=False, occupancy=True)
 
 
-        self.joints = [joint_from_name(environment.robot, "x"),
-              joint_from_name(environment.robot, "y"),
-              joint_from_name(environment.robot, "theta")]
+        self.joints = [joint_from_name(self.env.robot, "x"),
+              joint_from_name(self.env.robot, "y"),
+              joint_from_name(self.env.robot, "theta")]
 
-        start = tuple(environment.start)
-        goal = tuple(environment.goal)
+        start = tuple(self.env.start)
+        goal = tuple(self.env.goal)
 
-        final_path = self.search_Astar(start, goal, environment)
+        final_path = self.search_Astar(start, goal)
         final_path = self.adjust_angles(final_path, start, goal)
         print(final_path)
 
         for q in final_path:
-            set_joint_positions(environment.robot, self.joints, q)
+            set_joint_positions(self.env.robot, self.joints, q)
             time.sleep(0.1)
 
         wait_if_gui()
@@ -63,7 +65,7 @@ class AStarSearch(Planner):
 
 
 
-    def search_Astar(self, start, goal, environment):
+    def search_Astar(self, start, goal):
         paths = [[[start], 0.0, 0.0]]
         extended = set()
         while paths:
@@ -80,7 +82,7 @@ class AStarSearch(Planner):
             new_nodes = self.extend(current[-1])
             new_paths = []
             for node in new_nodes:
-                if not environment.check_state_collision(self.joints, node) and node not in extended:
+                if not self.env.check_state_collision(self.joints, node) and node not in extended:
                     paths.append([current + [node], self.compute_heuristics(node, goal), 
                         path[-1] + self.distance_between_nodes(current[-1], node)])
             paths = sorted(paths, key=lambda x: x[-2] + x[-1])
