@@ -57,14 +57,18 @@ class Snowplow(RRT):
             return base_conf
 
 
-    def sample_attachment(self, movable_box):
-        base_conf = self.sample_attachment_base_confs(self.env.robot, movable_box)
+    def get_grasp(self, base_conf, movable_box):
         base_pose = Pose(
             point=Point(x=base_conf[0], y=base_conf[1]),
             euler=Euler(yaw=base_conf[2]),
         )
         obj_pose = Pose(point=get_aabb_center(movable_box.aabb))
         base_grasp = multiply(invert(base_pose), obj_pose)
+        return base_grasp
+
+    def sample_attachment(self, movable_box):
+        base_conf = self.sample_attachment_base_confs(self.env.robot, movable_box)
+        base_grasp = self.get_grasp(base_conf, movable_box)
 
         return base_conf, base_grasp
 
@@ -149,9 +153,12 @@ class Snowplow(RRT):
                         while (not handling_complete):
                             is_relaxed = False
                             obstruction = self.find_path_obstruction(relaxed_final_path)
+                            attach_grasp = self.get_grasp(current_q,obstruction)
                             print("Finding placement path")
                             #self.env.visualize_attachment_bbs(obstruction, current_q, attach_grasp)
                             self.env.remove_movable_object(obstruction)
+                            print(obstruction)
+                            print(self.env.movable_boxes)
                             detach_path = self.get_detachment_path(obstruction, current_q, attach_grasp)
                             print("Found placement path. Looking if we can reach goal from there")
                             newly_added = self.env.place_movable_object(obstruction, detach_path[-1], attach_grasp)

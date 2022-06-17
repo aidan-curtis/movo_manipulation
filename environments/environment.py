@@ -317,7 +317,7 @@ class Environment(ABC):
         set_pose(movable_obj, obj_pose)
 
 
-    def adjust_angles(self, path, start, goal):
+    def adjust_angles_fast(self, path, start, goal):
         final_path = [start]
         for i in range(1, len(path)):
             beg = path[i-1]
@@ -332,8 +332,32 @@ class Environment(ABC):
         final_path.append(goal)
         return final_path
 
+    def adjust_angles(self, path, start, goal):
+        final_path = [start]
+        for i in range(1, len(path)):
+            angle_traversal = np.pi / 12
+            beg = path[i-1]
+            end = path[i]
 
-    def adjust_angles_backwards(self, path, start, goal):
+            delta_x = end[0] - beg[0]
+            delta_y = end[1] - beg[1]
+            theta = np.arctan2(delta_y, delta_x)
+
+            angle_diff = find_min_angle(beg[2], theta)
+            n_iters = int(abs(angle_diff / angle_traversal))
+            angle = beg[2]
+            if angle_diff < 0: angle_traversal *= -1
+            for e in range(n_iters):
+                angle += angle_traversal
+                final_path.append((beg[0], beg[1], angle))
+
+            final_path.append((beg[0], beg[1], theta))
+            final_path.append((end[0], end[1], theta))
+        final_path.append(goal)
+        return final_path
+
+
+    def adjust_angles_backwards_old(self, path, start, goal):
         final_path = [goal]
         for i in range(len(path)-1, 0, -1):
             beg = path[i]
@@ -350,10 +374,10 @@ class Environment(ABC):
         return final_path
 
 
-    def adjust_angles_backwards_experimental(self, path, start, goal):
-        angle_traversal = np.pi / 12
+    def adjust_angles_backwards(self, path, start, goal):
         final_path = [goal]
         for i in range(len(path) - 1, 0, -1):
+            angle_traversal = np.pi / 12
             beg = path[i]
             end = path[i - 1]
 
@@ -363,7 +387,7 @@ class Environment(ABC):
 
             angle_diff = find_min_angle(beg[2], theta)
             n_iters = int(abs(angle_diff / angle_traversal))
-            angle = final_path[-1][2]
+            angle = beg[2]
             if angle_diff < 0: angle_traversal *= -1
             for e in range(n_iters):
                 angle += angle_traversal

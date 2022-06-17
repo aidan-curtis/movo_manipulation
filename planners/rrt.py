@@ -40,10 +40,13 @@ class RRT(Planner):
             if(not graph.success):
                 return None
 
+
+            path = dijkstra(graph)
             if not moving_backwards:
-                final_path = self.env.adjust_angles(dijkstra(graph), start, goal)
+                final_path = self.env.adjust_angles(path, start, goal)
             else:
-                final_path = self.env.adjust_angles_backwards(dijkstra(graph), start, goal)
+                final_path = self.env.adjust_angles(path, goal, start)
+                final_path.reverse()
         if vis:
             plot(graph, path=final_path)
 
@@ -88,8 +91,12 @@ class RRT(Planner):
         return q, True
 
 
-    def rrt(self, start, goal, n_iter=500, radius = 0.3, goal_bias=0.1,
+    def rrt(self, start_node, goal_node, n_iter=500, radius = 0.3, goal_bias=0.1,
             ignore_movable=False, forced_object_coll=[], attached_object=None, moving_backwards=False):
+
+        start, goal = start_node, goal_node
+        if moving_backwards:
+            goal, start = start, goal
 
         lower, upper = self.env.room.aabb
         G = Graph(start, goal)
@@ -108,13 +115,13 @@ class RRT(Planner):
                 if near_vex is None:
                     break
 
-                new_vex = self.steer(near_vex, rand_vex)
+                new_vex = self.steer(near_vex, rand_vex, moving_backwards=False)
 
                 if self.env.check_collision_in_path(near_vex, new_vex,
                                                     ignore_movable=ignore_movable,
                                                     forced_object_coll=forced_object_coll,
                                                     attached_object=attached_object,
-                                                    moving_backwards=moving_backwards):
+                                                    moving_backwards=False):
                     new_vex = None
                 else:
                     break
@@ -154,12 +161,20 @@ class RRT(Planner):
         return (point[0], point[1], rand_t)
 
 
-    def steer(self, source_vex, dest_vex, step_size=0.1):
+    def steer(self, source_vex, dest_vex, step_size=0.1, moving_backwards=False):
         dirn = np.array(dest_vex[0:2]) - np.array(source_vex[0:2])
         length = np.linalg.norm(dirn)
         dirn = (dirn / length) * min(step_size, length)
 
-        new_vex = (source_vex[0]+dirn[0], source_vex[1]+dirn[1], dest_vex[2])
+        beg, end = source_vex, dest_vex
+        if moving_backwards:
+            beg, end = dest_vex, source_vex
+
+        delta_x = end[0] - beg[0]
+        delta_y = end[1] - beg[1]
+        theta = np.arctan2(delta_y, delta_x)
+
+        new_vex = (source_vex[0]+dirn[0], source_vex[1]+dirn[1], theta)
         return new_vex
 
 
@@ -214,6 +229,7 @@ def plot(G, env, path=None):
     '''
     px = [x for x, y, t in G.vertices]
     py = [y for x, y, t in G.vertices]
+    pt = [t for x, y, t in G.vertices]
     fig, ax = plt.subplots()
 
     ax.scatter(px, py, c='cyan')
@@ -224,15 +240,27 @@ def plot(G, env, path=None):
     lc = mc.LineCollection(lines, colors='green', linewidths=2)
     ax.add_collection(lc)
 
-    room = Rectangle((env.room.aabb.lower[0:2]),
-                     env.room.aabb.upper[0] - env.room.aabb.lower[0],
-                     env.room.aabb.upper[1] - env.room.aabb.lower[1],
-                     fc="none", color="red", linewidth=0.1)
-    ax.add_patch(room)
+    # Draw angles of points
+    angle_lines = []
+    for x,y,t in G.vertices:
+        endy = y + 0.05 * np.sin(t)
+        endx = x+ 0.05 * np.cos(t)
+        angle_lines.append(((x,y), (endx, endy)))
+    lc = mc.LineCollection(angle_lines, colors='red', linewidths=2)
+    ax.add_collection(lc)
+
+    # Draw room shape
+    for wall in env.room.walls:
+        wall_aabb = get_aabb(wall)
+        rec = Rectangle((wall_aabb.lower[0:2]),
+                     wall_aabb.upper[0] - wall_aabb.lower[0],
+                     wall_aabb.upper[1] - wall_aabb.lower[1],
+                     color="grey", linewidth=0.1)
+        ax.add_patch(rec)
 
     # Not taking rotations into account
     for obstacle in env.static_objects + env.movable_boxes:
-        color = "red"
+        color = "brown"
         if isinstance(obstacle, int):
             aabb = get_aabb(obstacle)
         else:
