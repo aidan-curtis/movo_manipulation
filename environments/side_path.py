@@ -10,6 +10,8 @@ class SidePath(Environment):
 
         self.start = (0, 0, 0)
         self.goal = (6, 2, 0) # TODO: Create separate class for configuration space
+        self.objects = []
+        self.viewed_voxels = []
 
     def disconnect(self):
         try:

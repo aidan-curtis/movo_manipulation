@@ -343,9 +343,9 @@ class Environment(ABC):
             delta_y = end[1] - beg[1]
             theta = np.arctan2(delta_y, delta_x)
 
-            angle_diff = find_min_angle(beg[2], theta)
+            angle_diff = find_min_angle(final_path[-1][2], theta)
             n_iters = int(abs(angle_diff / angle_traversal))
-            angle = beg[2]
+            angle = final_path[-1][2]
             if angle_diff < 0: angle_traversal *= -1
             for e in range(n_iters):
                 angle += angle_traversal

@@ -1,4 +1,5 @@
 from planners.rrt import RRT
+from planners.a_star_search import AStarSearch
 from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions,
                                                     invert, multiply, pairwise_collisions, Pose, Point, Euler,
                                                     point_from_pose, sample_directed_reachable_base, get_pose,
@@ -7,6 +8,7 @@ from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name
                                                     RED, YELLOW, get_all_links)
 import numpy as np
 import pybullet as p
+import random
 import time
 
 
@@ -17,7 +19,7 @@ class Snowplow(RRT):
         # Setup the environment (Not needed because of RRT already setting it up)
         #self.env.setup()
 
-        self.step_size = [0.05, np.pi/18]
+        #self.step_size = [0.05, np.pi/18]
         self.RRT_ITERS = 5000
         self.COLLISION_DISTANCE = 5e-3
 
@@ -118,6 +120,16 @@ class Snowplow(RRT):
         return q, True
 
 
+    def sample_from_vision(self):
+        resolution = self.env.visibility_grid.resolutions
+        free_points = [(free[0]*resolution[0], free[1]*resolution[1])
+                       for free in self.env.viewed_voxels]
+        point = random.choice(free_points)
+        rand_t = np.random.uniform(0, 2 * np.pi)
+
+        return (point[0], point[1], rand_t)
+
+
     def get_plan(self):
         
         camera_pose, image_data = self.env.get_robot_vision()
@@ -153,7 +165,7 @@ class Snowplow(RRT):
                         while (not handling_complete):
                             is_relaxed = False
                             obstruction = self.find_path_obstruction(relaxed_final_path)
-                            attach_grasp = self.get_grasp(current_q,obstruction)
+                            attach_grasp = self.get_grasp(current_q, obstruction)
                             print("Finding placement path")
                             #self.env.visualize_attachment_bbs(obstruction, current_q, attach_grasp)
                             self.env.remove_movable_object(obstruction)
