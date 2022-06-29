@@ -19,6 +19,9 @@ class Complex(Environment):
         self.objects = []
         self.viewed_voxels = []
 
+        # Properties represented as a list of width, length, height, mass
+        self.objects_prop = dict()
+
     def disconnect(self):
         try:
             p.disconnect()
@@ -50,6 +53,11 @@ class Complex(Environment):
                     )
                 )
             )
+            chair_aabb = get_aabb(blocking_chair)
+            self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
+                                                 chair_aabb.upper[1] - chair_aabb.lower[1],
+                                                 chair_aabb.upper[2] - chair_aabb.lower[2],
+                                                 1]
 
             blocking_box = create_box(1,2,1, mass=1, color=BROWN)
             set_pose(blocking_box,
@@ -60,6 +68,8 @@ class Complex(Environment):
                     )
                 )
             )
+            self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
+
             self.objects += [blocking_box, blocking_chair]
             self.static_objects = [blocking_box]
             self.centered_aabb = self.get_centered_aabb()

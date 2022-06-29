@@ -16,8 +16,3 @@ class DoNothing(Planner):
         plot(G, self.env)
 
         wait_if_gui()
-
-
-
-
-

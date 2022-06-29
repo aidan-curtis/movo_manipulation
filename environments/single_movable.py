@@ -2,7 +2,7 @@ from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 
 from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
-                                                    set_joint_position, load_model)
+                                                    set_joint_position, load_model, get_aabb)
 import math
 import random
 import pybullet as p
@@ -15,6 +15,9 @@ class SingleMovable(Environment):
         self.goal = (6, 2, 0) # TODO: Create separate class for configuration space
         self.objects = []
         self.viewed_voxels = []
+
+        # Properties represented as a list of width, length, height, mass
+        self.objects_prop = dict()
 
     def disconnect(self):
         try:
@@ -41,6 +44,7 @@ class SingleMovable(Environment):
                         )
                     )
                 )
+            self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
 
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.5
@@ -55,6 +59,11 @@ class SingleMovable(Environment):
                     )
                 )
             )
+            chair_aabb = get_aabb(blocking_chair)
+            self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
+                                                 chair_aabb.upper[1] - chair_aabb.lower[1],
+                                                 chair_aabb.upper[2] - chair_aabb.lower[2],
+                                                 1]
 
             #self.room = self.create_closed_room(length=6, width=10, center = [3,2], movable_obstacles=[blocking_chair])
             self.room = self.create_room(movable_obstacles=[blocking_chair])

@@ -13,6 +13,9 @@ class Empty(Environment):
         self.objects = []
         self.viewed_voxels = []
 
+        # Properties represented as a list of width, length, height, mass
+        self.objects_prop = dict()
+
     def disconnect(self):
         try:
             p.disconnect()

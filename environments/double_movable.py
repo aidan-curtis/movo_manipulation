@@ -17,6 +17,9 @@ class DoubleMovable(Environment):
         self.objects = []
         self.viewed_voxels = []
 
+        # Properties represented as a list of width, length, height, mass
+        self.objects_prop = dict()
+
     def disconnect(self):
         try:
             p.disconnect()
@@ -40,6 +43,7 @@ class DoubleMovable(Environment):
                      )
                      )
                      )
+            self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
 
             blocking_chair_1 = load_model(
                 "../models/partnet_mobility/179/mobility.urdf", scale=0.5
@@ -54,6 +58,11 @@ class DoubleMovable(Environment):
                      )
                      )
                      )
+            chair_aabb = get_aabb(blocking_chair_1)
+            self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
+                                                 chair_aabb.upper[1] - chair_aabb.lower[1],
+                                                 chair_aabb.upper[2] - chair_aabb.lower[2],
+                                                 1]
 
             blocking_chair_2 = load_model(
                 "../models/partnet_mobility/179/mobility.urdf", scale=0.5
@@ -68,6 +77,11 @@ class DoubleMovable(Environment):
                      )
                      )
                      )
+            chair_aabb = get_aabb(blocking_chair_2)
+            self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
+                                                 chair_aabb.upper[1] - chair_aabb.lower[1],
+                                                 chair_aabb.upper[2] - chair_aabb.lower[2],
+                                                 1]
 
             self.room = self.create_room(movable_obstacles=[blocking_chair_1, blocking_chair_2])
             self.objects += [blocking_box, blocking_chair_1, blocking_chair_2]

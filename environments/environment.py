@@ -15,9 +15,8 @@ from utils.utils import iterate_point_cloud
 import pybullet as p
 import os 
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from functools import cached_property
-from collections import defaultdict
 
 GRID_HEIGHT = 2 # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.1 # Grid resolutions
@@ -26,6 +25,8 @@ LIGHT_GREY = RGBA(0.7, 0.7, 0.7, 1)
 
 
 Room = namedtuple("Room", ["walls", "floors", "aabb", "movable_obstacles"])
+Force = namedtuple("Force", ["magnitude", "angle"])
+
 
 class Environment(ABC):
 
@@ -457,6 +458,49 @@ class Environment(ABC):
         draw_aabb(robot_aabb)
         draw_aabb(object_aabb)
         return
+
+    def push(self, force, position, object):
+        friction_coeff = 0.1
+        m = self.objects_prop[object][3]
+        g = 9.8
+        delta_t = 0.1
+        I = 1/12 * m * (self.objects_prop[object][0]**2 + self.objects_prop[object][1]**2)
+        object_center = get_pose(object)[0][:2]
+
+        delta_x = position[0] - object_center[0]
+        delta_y = position[1] - object_center[1]
+        theta = np.arctan2(delta_y, delta_x)
+        #print("Angle of the torque: {}".format(theta))
+
+        rel_theta = force.angle- theta
+        #print("Relative theta: {}".format(rel_theta))
+
+        actual_force = force.magnitude - g*m*friction_coeff
+        force_x = round(actual_force * np.cos(rel_theta),3)
+        force_y = round(actual_force * np.sin(rel_theta),3)
+
+        d = ((position[0] - object_center[0])**2 + (position[1] - object_center[1])**2)**0.5
+
+        torque = d*force_y
+        angular_dis = torque/I * (delta_t**2)/2
+        #print("Angular displacement: {}".format(angular_dis))
+
+        s = force_x/m * (delta_t**2)/2
+
+        s_x = s*np.cos(theta)
+        s_y = s*np.sin(theta)
+        #print("Relative displacements: {}, {}".format(s_x, s_y))
+
+        #print("Torque: {}".format(torque))
+        #print("Relative forces: {} , {}".format(force_x, force_y))
+        #print("Object center: {}".format(object_center))
+
+        transform = Pose(point=Point(x=s_x, y=s_y, z=0), euler=(0, 0, angular_dis))
+        new_pose = multiply(get_pose(object), transform)
+        #print("New Pose: {}".format(new_pose))
+        set_pose(object, new_pose)
+
+        return new_pose
 
 
 
