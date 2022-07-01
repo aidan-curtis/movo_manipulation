@@ -2,21 +2,21 @@ import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 from matplotlib.patches import Rectangle, Arrow
 import numpy as np
+from pybullet_planning.pybullet_tools.utils import get_aabb, wait_if_gui
 
-from pybullet_planning.pybullet_tools.utils import get_aabb
 
 class Graph:
-    def __init__(self, startpos, endpos):
-        self.startpos = startpos
-        self.endpos = endpos
+    def __init__(self):
+        self.startpos = None
+        self.endpos = None
 
-        self.vertices = [startpos]
+        self.vertices = []
         self.edges = []
         self.success = False
 
-        self.vex2idx = {startpos: 0}
-        self.neighbors = {0: []}
-        self.distances = {0: 0.0}
+        self.vex2idx = dict()
+        self.neighbors = dict()
+        self.distances = dict()
 
 
     def add_vex(self, pos):
@@ -30,22 +30,13 @@ class Graph:
         return idx
 
 
-    def add_edge(self, idx1, idx2, cost):
+    def add_edge(self, idx1, idx2):
         self.edges.append((idx1, idx2))
-        self.neighbors[idx1].append((idx2, cost))
-        self.neighbors[idx2].append((idx1, cost))
+        self.neighbors[idx1].append(idx2)
+        self.neighbors[idx2].append(idx1)
 
 
-    def nearest_vex(self, vex, environment, joints, k=0):
-        neighbors = [(distance(v,vex), v, idx) for idx,v in enumerate(self.vertices)]
-        neighbors = sorted(neighbors, key=lambda x: x[0])
-
-        if len(neighbors) < k+1:
-            return None, None
-
-        return neighbors[k][1], neighbors[k][2]
-
-    def initialize_full_graph(self, env, resolution=[0.1, 0.1, 0]):
+    def initialize_full_graph(self, env, resolution=[0.1, 0.1, np.pi/8]):
         x_step = int((env.room.aabb.upper[0] - env.room.aabb.lower[0])/resolution[0])+1
         y_step = int((env.room.aabb.upper[1] - env.room.aabb.lower[1])/resolution[1])+1
         t_step = int((2*np.pi)/(resolution[2])) if resolution[2] != 0 else 1
@@ -59,7 +50,22 @@ class Graph:
                 t = -resolution[2]
                 for k in range(t_step):
                     t+= resolution[2]
-                    self.add_vex((x,y,t))
+                    self.add_vex((round(x,2),round(y,2),t))
+
+        n_vertices = x_step*y_step*t_step
+        for i in range(n_vertices):
+            # Add turn edges
+            if (i+1) % t_step != 0:
+                self.add_edge(i, i+1)
+            else:
+                self.add_edge(i, i+1-t_step)
+
+            # Add movement edges
+            if i % (y_step*t_step) < ((y_step-1)*t_step):
+                self.add_edge(i, i+t_step)
+
+            if i < (n_vertices - (t_step * y_step)):
+                self.add_edge(i, i + y_step*t_step)
 
 
     def dijkstra(self):
@@ -107,18 +113,16 @@ class Graph:
         fig, ax = plt.subplots()
 
         ax.scatter(px, py, c='cyan')
-        ax.scatter(self.startpos[0], self.startpos[1], c='black')
-        ax.scatter(self.endpos[0], self.endpos[1], c='red')
+        if self.startpos != None and self.endpos != None:
+            ax.scatter(self.startpos[0], self.startpos[1], c='black')
+            ax.scatter(self.endpos[0], self.endpos[1], c='red')
 
         lines = [(self.vertices[edge[0]][0:2], self.vertices[edge[1]][0:2]) for edge in self.edges]
-        for points in lines:
-            dx = points[1][0] - points[0][0]
-            dy = points[1][1] - points[0][1]
-            ax.add_patch(Arrow(points[0][0], points[0][1], dx, dy, width=0.01))
-        #lc = mc.LineCollection(lines, colors='green', linewidths=2)
-        #ax.add_collection(lc)
+        lc = mc.LineCollection(lines, colors='green', linewidths=2)
+        ax.add_collection(lc)
 
         # Draw angles of points
+        '''
         angle_lines = []
         for x,y,t in self.vertices:
             endy = y + 0.05 * np.sin(t)
@@ -126,6 +130,7 @@ class Graph:
             angle_lines.append(((x,y), (endx, endy)))
         lc = mc.LineCollection(angle_lines, colors='red', linewidths=2)
         ax.add_collection(lc)
+        '''
 
         # Draw room shape
         for wall in env.room.walls:
