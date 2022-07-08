@@ -2,6 +2,7 @@ import argparse
 from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
+from planners.vamp import Vamp
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
@@ -16,6 +17,7 @@ import os
 PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
             "rrt": RRT,
+            "vamp": Vamp,
             "do_nothing": DoNothing}
 
 ENVIRONMENTS = {"empty": Empty,

@@ -1,4 +1,5 @@
-from environments.environment import Environment
+#from environments.environment import Environment
+from environments.vamp_environment import Environment
 
 from pybullet_planning.pybullet_tools.utils import LockRenderer
 import pybullet as p
@@ -22,7 +23,7 @@ class Empty(Environment):
         except:
             pass
 
-    def setup(self):
+    def setup(self, G=None):
 
         self.disconnect()
         
@@ -37,3 +38,4 @@ class Empty(Environment):
         self.objects += []
         self.static_objects = []
         self.centered_aabb = self.get_centered_aabb()
+        self.centered_oobb = self.get_centered_oobb()

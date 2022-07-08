@@ -18,6 +18,8 @@ class Graph:
         self.neighbors = dict()
         self.distances = dict()
 
+        self.t_step = None
+
 
     def add_vex(self, pos):
         try:
@@ -37,35 +39,37 @@ class Graph:
 
 
     def initialize_full_graph(self, env, resolution=[0.1, 0.1, np.pi/8]):
-        x_step = int((env.room.aabb.upper[0] - env.room.aabb.lower[0])/resolution[0])+1
-        y_step = int((env.room.aabb.upper[1] - env.room.aabb.lower[1])/resolution[1])+1
-        t_step = int((2*np.pi)/(resolution[2])) if resolution[2] != 0 else 1
+        self.x_step = int((env.room.aabb.upper[0] - env.room.aabb.lower[0])/resolution[0])+1
+        self.y_step = int((env.room.aabb.upper[1] - env.room.aabb.lower[1])/resolution[1])+1
+        self.t_step = int((2*np.pi)/(resolution[2])) if resolution[2] != 0 else 1
+
+        self.res = resolution
 
         x = env.room.aabb.lower[0]-resolution[0]
-        for i in range(x_step):
+        for i in range(self.x_step):
             y = env.room.aabb.lower[1]-resolution[1]
             x += resolution[0]
-            for j in range(y_step):
+            for j in range(self.y_step):
                 y+= resolution[1]
                 t = -resolution[2]
-                for k in range(t_step):
+                for k in range(self.t_step):
                     t+= resolution[2]
-                    self.add_vex((round(x,2),round(y,2),t))
+                    self.add_vex((round(x,2),round(y,2),round(t, 3)))
 
-        n_vertices = x_step*y_step*t_step
+        n_vertices = self.x_step*self.y_step*self.t_step
         for i in range(n_vertices):
             # Add turn edges
-            if (i+1) % t_step != 0:
+            if (i+1) % self.t_step != 0:
                 self.add_edge(i, i+1)
             else:
-                self.add_edge(i, i+1-t_step)
+                self.add_edge(i, i+1-self.t_step)
 
             # Add movement edges
-            if i % (y_step*t_step) < ((y_step-1)*t_step):
-                self.add_edge(i, i+t_step)
+            if i % (self.y_step*self.t_step) < ((self.y_step-1)*self.t_step):
+                self.add_edge(i, i+self.t_step)
 
-            if i < (n_vertices - (t_step * y_step)):
-                self.add_edge(i, i + y_step*t_step)
+            if i < (n_vertices - (self.t_step * self.y_step)):
+                self.add_edge(i, i + self.y_step*self.t_step)
 
 
     def dijkstra(self):
