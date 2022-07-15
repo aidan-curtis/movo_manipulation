@@ -168,5 +168,55 @@ class Graph:
         ax.margins(0.1)
         plt.show()
 
+
+    def plot_search(self, env, extended, path=None):
+        fig, ax = plt.subplots()
+        # Draw room shape
+        for wall in env.room.walls:
+            wall_aabb = get_aabb(wall)
+            rec = Rectangle((wall_aabb.lower[0:2]),
+                            wall_aabb.upper[0] - wall_aabb.lower[0],
+                            wall_aabb.upper[1] - wall_aabb.lower[1],
+                            color="grey", linewidth=0.1)
+            ax.add_patch(rec)
+
+        # Not taking rotations into account
+        for obstacle in env.static_objects + env.movable_boxes:
+            color = "brown"
+            if isinstance(obstacle, int):
+                aabb = get_aabb(obstacle)
+            else:
+                aabb = obstacle.aabb
+                color = "yellow"
+            ax.add_patch(Rectangle((aabb.lower[0], aabb.lower[1]),
+                                   aabb.upper[0] - aabb.lower[0],
+                                   aabb.upper[1] - aabb.lower[1],
+                                   color=color, linewidth=0.1))
+
+        px = [x for x, y, t in extended]
+        py = [y for x, y, t in extended]
+        pt = [t for x, y, t in extended]
+
+        ax.scatter(px, py, c='cyan')
+
+        angle_lines = []
+        for x, y, t in extended:
+            endy = y + 0.05 * np.sin(t)
+            endx = x + 0.05 * np.cos(t)
+            angle_lines.append(((x, y), (endx, endy)))
+        lc = mc.LineCollection(angle_lines, colors='red', linewidths=2)
+        ax.add_collection(lc)
+
+        if path is not None:
+            paths = [(path[i][0:2], path[i + 1][0:2]) for i in range(len(path) - 1)]
+            lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
+            ax.add_collection(lc2)
+
+        ax.autoscale()
+        ax.margins(0.1)
+        plt.show()
+
+
+
 def distance(vex1, vex2):
     return ((vex1[0] - vex2[0])**2 + (vex1[1]-vex2[1])**2)**0.5

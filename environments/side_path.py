@@ -1,4 +1,5 @@
-from environments.environment import Environment
+#from environments.environment import Environment
+from environments.vamp_environment import Environment
 
 from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, 
                                                     set_pose, Pose, Point, LockRenderer)
@@ -47,5 +48,6 @@ class SidePath(Environment):
 
             self.setup_grids()
         self.centered_aabb = self.get_centered_aabb()
+        self.centered_oobb = self.get_centered_oobb()
         self.objects += [blocking_box]
         self.static_objects = [blocking_box]

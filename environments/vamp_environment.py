@@ -115,7 +115,7 @@ class Environment(ABC):
                     self.viewed_voxels.append(voxel)
                     grid.set_free(voxel)
                     self.gained_vision[q].add(voxel)
-        return grid
+        return self.gained_vision[q]
 
 
     def setup_grids(self):
