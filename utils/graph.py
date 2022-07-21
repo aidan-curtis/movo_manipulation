@@ -20,6 +20,8 @@ class Graph:
 
         self.t_step = None
 
+        self.fig = None
+
 
     def add_vex(self, pos):
         try:
@@ -38,7 +40,7 @@ class Graph:
         self.neighbors[idx2].append(idx1)
 
 
-    def initialize_full_graph(self, env, resolution=[0.1, 0.1, np.pi/8]):
+    def initialize_full_graph(self, env, resolution):
         self.x_step = int((env.room.aabb.upper[0] - env.room.aabb.lower[0])/resolution[0])+1
         self.y_step = int((env.room.aabb.upper[1] - env.room.aabb.lower[1])/resolution[1])+1
         self.t_step = int((2*np.pi)/(resolution[2])) if resolution[2] != 0 else 1
@@ -70,6 +72,10 @@ class Graph:
 
             if i < (n_vertices - (self.t_step * self.y_step)):
                 self.add_edge(i, i + self.y_step*self.t_step)
+
+    def rand_vex(self):
+        i = np.random.randint(len(self.vertices))
+        return self.vertices[i]
 
 
     def dijkstra(self):
@@ -169,6 +175,55 @@ class Graph:
         plt.show()
 
 
+    def plot_search_dynamic(self, env, node, path=None):
+        if self.fig == None:
+            self.fig, self.ax = plt.subplots()
+            # Draw room shape
+            for wall in env.room.walls:
+                wall_aabb = get_aabb(wall)
+                rec = Rectangle((wall_aabb.lower[0:2]),
+                                wall_aabb.upper[0] - wall_aabb.lower[0],
+                                wall_aabb.upper[1] - wall_aabb.lower[1],
+                                color="grey", linewidth=0.1)
+                self.ax.add_patch(rec)
+
+            # Not taking rotations into account
+            for obstacle in env.static_objects + env.movable_boxes:
+                color = "brown"
+                if isinstance(obstacle, int):
+                    aabb = get_aabb(obstacle)
+                else:
+                    aabb = obstacle.aabb
+                    color = "yellow"
+                self.ax.add_patch(Rectangle((aabb.lower[0], aabb.lower[1]),
+                                       aabb.upper[0] - aabb.lower[0],
+                                       aabb.upper[1] - aabb.lower[1],
+                                       color=color, linewidth=0.1))
+
+        x = [node[0]]
+        y = [node[1]]
+        t = [node[2]]
+
+        self.ax.scatter(x, y, c='cyan')
+
+        angle_lines = []
+        endy = y[0] + 0.05 * np.sin(t[0])
+        endx = x[0] + 0.05 * np.cos(t[0])
+        angle_lines.append(((x[0], y[0]), (endx, endy)))
+        lc = mc.LineCollection(angle_lines, colors='red', linewidths=2)
+        self.ax.add_collection(lc)
+
+        #if path is not None:
+        #    paths = [(path[i][0:2], path[i + 1][0:2]) for i in range(len(path) - 1)]
+        #    lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
+        #    self.ax.add_collection(lc2)
+
+        self.ax.autoscale()
+        self.ax.margins(0.1)
+        plt.show(block=False)
+        plt.pause(0.05)
+
+
     def plot_search(self, env, extended, path=None):
         fig, ax = plt.subplots()
         # Draw room shape
@@ -215,7 +270,6 @@ class Graph:
         ax.autoscale()
         ax.margins(0.1)
         plt.show()
-
 
 
 def distance(vex1, vex2):

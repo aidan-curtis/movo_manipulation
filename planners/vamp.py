@@ -2,11 +2,14 @@ from planners.planner import Planner
 from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pose, draw_oobb, LockRenderer,
                                                     Point, draw_aabb, set_joint_positions, joint_from_name,
                                                     get_link_pose, link_from_name, get_camera_matrix, draw_pose,
-                                                    multiply, tform_point, invert, pixel_from_point, get_aabb_volume)
+                                                    multiply, tform_point, invert, pixel_from_point, get_aabb_volume,
+                                                    get_aabb_vertices)
 import numpy as np
 import time
+import scipy.spatial
 
 from utils.graph import Graph
+from environments.vamp_environment import GRID_RESOLUTION
 
 
 class Vamp(Planner):
@@ -17,7 +20,7 @@ class Vamp(Planner):
         self.env.setup()
 
         self.G = Graph()
-        self.G.initialize_full_graph(self.env)
+        self.G.initialize_full_graph(self.env, [GRID_RESOLUTION, GRID_RESOLUTION, np.pi/8])
 
         self.env.setup_default_vision(self.G)
 
@@ -31,6 +34,9 @@ class Vamp(Planner):
     def get_plan(self):
         q_start, q_goal = (0, 0, 0), (6, 2, 0)
         v_0 = self.get_circular_vision(q_start)
+        self.env.update_vision_from_voxels(v_0)
+
+        R = self.get_circular_vision(q_goal)
 
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
@@ -40,7 +46,8 @@ class Vamp(Planner):
         complete = False
         current_q = q_start
         while not complete:
-            path = self.vamp_path_vis(current_q, q_goal, v_0, relaxed=True)
+            path = self.tourist(current_q, R, v_0, relaxed=False)
+            #path = self.vamp_path_vis(current_q, q_goal, v_0, relaxed=False)
             if path is None:
                 print("Can't find path")
                 break
@@ -53,22 +60,51 @@ class Vamp(Planner):
         print("Reached the goal")
         wait_if_gui()
 
+    def tourist(self, q_start, R, v_0, relaxed=False, obstructions=set()):
+        q_goal = None
+        score = 0
+        for i in range(1000):
+            q_rand = self.G.rand_vex()
+            if not self.obstruction_from_path([q_rand], obstructions):
+                new_score = len(self.env.get_optimistic_vision(q_rand, self.G).intersection(R))
+                if new_score != 0:
+                    if new_score > score:
+                        q_goal = q_rand
+                        score = new_score
 
-    def vamp_step_vis(self, q_start, q_goal, v_0, H=0, relaxed=False):
-        if H ==0:
+        def heuristic_fn(q):
+            return distance(q, q_goal)
+            '''
+            vision_q = self.env.get_optimistic_vision(q, self.G)
+            if len(R.intersection(vision_q)) != 0:
+                #return 0
+                return 0 + distance(q, q_goal)
+            if len(vision_q) == 0:
+                return np.inf
+            s1 = np.array(list(vision_q))
+            s2 = np.array(list(R))
+
+            #return scipy.spatial.distance.cdist(s1, s2).min()
+            return distance(q, q_goal) + scipy.spatial.distance.cdist(s1, s2).min()*GRID_RESOLUTION
+            '''
+        return self.vamp_path_vis(q_start, q_goal, v_0, H=heuristic_fn, relaxed=relaxed, obstructions=obstructions)
+
+
+    def vamp_step_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set()):
+        if H == 0:
             H = lambda x: distance(x, q_goal)
             # H = lambda x: 0
 
-        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_step)
+        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_step, obstructions=obstructions)
 
 
-    def vamp_path_vis(self, q_start, q_goal, v_0, H=0, relaxed=False):
-        if H ==0:
+    def vamp_path_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set()):
+        if H == 0:
             H = lambda x: distance(x, q_goal)
             # H = lambda x: 0
         self.vision_q = dict()
 
-        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_path)
+        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_path, obstructions=obstructions)
 
 
     def action_fn_step(self, path, v_0, relaxed=False, extended=set(), obstructions=set()):
@@ -139,7 +175,6 @@ class Vamp(Planner):
             actual_q = (q[0], q[1], 0)
             actual_vox = np.array(voxel) * np.array(self.G.res)
             if distance(actual_vox, actual_q) < radius:
-                self.env.visibility_grid.set_free(voxel)
                 voxels.add(voxel)
         return voxels
 
@@ -165,7 +200,6 @@ class Vamp(Planner):
             voxel = obstruction.intersection(self.visibility_voxels_from_path([q]))
             voxels.update(voxel)
 
-
         return voxels
 
 
@@ -177,8 +211,8 @@ class Vamp(Planner):
 
 
 
-    def a_star(self, q_start, q_goal, v_0, H, relaxed, action_fn):
-        #current_t = time.clock_gettime_ns(0)
+    def a_star(self, q_start, q_goal, v_0, H, relaxed, action_fn, obstructions=set()):
+        current_t = time.clock_gettime_ns(0)
         extended = set()
         paths = [([q_start], 0, 0)]
 
@@ -192,13 +226,13 @@ class Vamp(Planner):
                 continue
 
             if best_path[-1] == q_goal:
+                done = time.clock_gettime_ns(0) - current_t
+                print(done * (10 ** (-9)))
                 self.G.plot_search(self.env, extended, path=best_path)
-                #done = time.clock_gettime_ns(0) - current_t
-                #print(done * (10 ** (-9)))
                 return best_path
 
             extended.add(best_path[-1])
-            for action in action_fn(best_path, v_0, relaxed=relaxed, extended=extended):
+            for action in action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions):
                 paths.append((best_path + [action[0]], best_path_cost+ action[1], H(action[0])))
 
             # Only sorting from heuristic. Faster but change if needed
@@ -236,7 +270,8 @@ class Vamp(Planner):
 
 def distance(vex1, vex2):
     dist = 0
-    for i in range(len(vex1)):
+    for i in range(len(vex1)-1):
         dist += (vex1[i] - vex2[i])**2
+    #dist += (vex1[len(vex1)-1] - vex2[len(vex1)-1])**2/100
     return dist**0.5
 

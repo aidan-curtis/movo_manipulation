@@ -22,7 +22,7 @@ from collections import namedtuple, defaultdict
 from functools import cached_property
 
 GRID_HEIGHT = 2  # Height of the visibility and occupancy grids
-GRID_RESOLUTION = 0.1  # Grid resolutions
+GRID_RESOLUTION = 0.2  # Grid resolutions
 
 LIGHT_GREY = RGBA(0.7, 0.7, 0.7, 1)
 
@@ -130,7 +130,7 @@ class Environment(ABC):
         surface_origin = Pose(Point(z=0.01))
         # surface_aabb = self.room.aabb
         surface_aabb = AABB(lower=self.room.aabb.lower+np.array([-1, -1, 0]),
-                            upper=(self.room.aabb.upper[0]+1, self.room.aabb.upper[1]+1, 0.1))
+                            upper=(self.room.aabb.upper[0]+1, self.room.aabb.upper[1]+1, GRID_RESOLUTION))
         grid = VoxelGrid(
             resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
         )
@@ -165,13 +165,19 @@ class Environment(ABC):
         resulting_voxels = set()
         for voxel in default_one:
             voxel_w = np.array(voxel)*np.array(G.res)
-            new_voxel_w = voxel_w + np.array([q[0], q[1], 0.1])
+            new_voxel_w = voxel_w + np.array([q[0], q[1], GRID_RESOLUTION])
             new_voxel = np.rint(np.array(new_voxel_w)/np.array(G.res))
             new_voxel = (new_voxel[0], new_voxel[1], 0)
             if self.static_vis_grid.contains(new_voxel):
                 resulting_voxels.add((new_voxel[0], new_voxel[1], 0))
 
         return resulting_voxels
+
+
+    def update_vision_from_voxels(self, voxels):
+        for voxel in voxels:
+            self.visibility_grid.set_free(voxel)
+
 
     def gained_vision_from_conf(self, q):
 
@@ -189,7 +195,6 @@ class Environment(ABC):
                 dist = distance(voxel_pos, camera_pose[0])
 
                 if dist < FAR:
-                    #self.visibility_grid.set_free(voxel)
                     voxels.add(voxel)
         return voxels
 
@@ -295,7 +300,9 @@ class Environment(ABC):
         return OOBB(oobb.aabb, pose)
 
     def aabb_from_q(self, q):
-        return aabb_from_oobb(self.oobb_from_q(q))
+        aabb = aabb_from_oobb(self.oobb_from_q(q))
+        aabb.upper[2] += 0.5
+        return aabb
 
 
 def distance(vex1, vex2):
