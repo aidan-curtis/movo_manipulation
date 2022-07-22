@@ -6,7 +6,10 @@ from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pos
                                                     get_aabb_vertices)
 import numpy as np
 import time
+import datetime
 import scipy.spatial
+import pickle
+import os
 
 from utils.graph import Graph
 from environments.vamp_environment import GRID_RESOLUTION
@@ -31,22 +34,30 @@ class Vamp(Planner):
         self.occupied_voxels = dict()
 
 
-    def get_plan(self):
+    def get_plan(self, loadfile=None):
         q_start, q_goal = (0, 0, 0), (6, 2, 0)
-        v_0 = self.get_circular_vision(q_start)
-        self.env.update_vision_from_voxels(v_0)
+        self.v_0 = self.get_circular_vision(q_start)
+        self.env.update_vision_from_voxels(self.v_0)
 
-        R = self.get_circular_vision(q_goal)
+        self.R = self.get_circular_vision(q_goal)
 
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
         self.env.update_occupancy(image_data)
         self.env.plot_grids(True, True, True)
 
-        complete = False
-        current_q = q_start
-        while not complete:
-            path = self.tourist(current_q, R, v_0, relaxed=False)
+        self.complete = False
+        self.current_q = q_start
+
+        if loadfile is not None:
+            self.load_state(loadfile)
+
+            self.env.plot_grids(True, True, True)
+            print("State loaded")
+            wait_if_gui()
+
+        while not self.complete:
+            path = self.tourist(self.current_q, self.R, self.v_0, relaxed=False)
             #path = self.vamp_path_vis(current_q, q_goal, v_0, relaxed=False)
             if path is None:
                 print("Can't find path")
@@ -54,8 +65,13 @@ class Vamp(Planner):
             print("Found path:")
             print(path)
 
-            current_q, complete, gained_vision = self.execute_path(path)
-            v_0.update(gained_vision)
+            self.current_q, self.complete, gained_vision = self.execute_path(path)
+            self.v_0.update(gained_vision)
+
+            print("Want to save this tate? Press Y or N then Enter")
+            x = input()
+            if x == "Y" or x == "y":
+                self.save_state()
 
         print("Reached the goal")
         wait_if_gui()
@@ -266,6 +282,31 @@ class Vamp(Planner):
                 return q, False, gained_vision
             self.env.plot_grids(visibility=True, occupancy=True, movable=True)
         return q, True, gained_vision
+
+
+    def save_state(self):
+        current_time = datetime.datetime.now()
+        dbfile = open("state_{}_{}_{}_{}_{}".format(current_time.month, current_time.day, current_time.hour,
+                                           current_time.minute, current_time.second), "wb")
+        pickle.dump(self, dbfile)
+        dbfile.close()
+
+    def load_state(self, filename):
+        dbfile = open(filename, 'rb')
+        copy = pickle.load(dbfile)
+
+        self.env = copy.env
+        self.G = copy.G
+        self.occupied_voxels = copy.occupied_voxels
+        self.v_0 = copy.v_0
+
+        self.R = copy.R
+
+
+        self.complete = copy.complete
+        self.current_q = copy.current_q
+
+        dbfile.close()
 
 
 def distance(vex1, vex2):
