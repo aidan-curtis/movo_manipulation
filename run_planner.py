@@ -53,6 +53,16 @@ def get_args():
         "--vis",
         action="store_true"
     )
+
+    parser.add_argument(
+        "-l",
+        "--load",
+        type=str,
+        default=None,
+        help="Data file indicating saved state"
+    )
+
+
     args = parser.parse_args()
     return args
 
@@ -69,7 +79,7 @@ if __name__=="__main__":
     env = ENVIRONMENTS[args.env]()
 
     planner = PLANNERS[args.algo](env)
-    plan = planner.get_plan()
+    plan = planner.get_plan(loadfile=args.load)
     statistics = env.validate_plan(plan)
 
     #write_results(args, statistics)

@@ -50,9 +50,10 @@ class Vamp(Planner):
         self.current_q = q_start
 
         if loadfile is not None:
-            self.load_state(loadfile)
+            self.load_state("saves/" + loadfile)
 
             self.env.plot_grids(True, True, True)
+            set_joint_positions(self.env.robot, self.joints, self.current_q)
             print("State loaded")
             wait_if_gui()
 
@@ -286,7 +287,7 @@ class Vamp(Planner):
 
     def save_state(self):
         current_time = datetime.datetime.now()
-        dbfile = open("state_{}_{}_{}_{}_{}".format(current_time.month, current_time.day, current_time.hour,
+        dbfile = open("saves/state_{}_{}_{}_{}_{}.dat".format(current_time.month, current_time.day, current_time.hour,
                                            current_time.minute, current_time.second), "wb")
         pickle.dump(self, dbfile)
         dbfile.close()
