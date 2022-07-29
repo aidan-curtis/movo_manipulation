@@ -35,7 +35,7 @@ class Vamp(Planner):
 
 
     def get_plan(self, loadfile=None):
-        q_start, q_goal = (0, 0, 0), (6, 2, 0)
+        q_start, q_goal = self.env.start, self.env.goal
         self.v_0 = self.get_circular_vision(q_start)
         self.env.update_vision_from_voxels(self.v_0)
 
@@ -57,9 +57,9 @@ class Vamp(Planner):
             print("State loaded")
             wait_if_gui()
 
+        wait_if_gui()
         while not self.complete:
-            path = self.tourist(self.current_q, self.R, self.v_0, relaxed=False)
-            #path = self.vamp_path_vis(current_q, q_goal, v_0, relaxed=False)
+            path = self.vamp_backchain(self.current_q, q_goal, self.v_0)
             if path is None:
                 print("Can't find path")
                 break
@@ -76,6 +76,42 @@ class Vamp(Planner):
 
         print("Reached the goal")
         wait_if_gui()
+
+
+    def vamp_backchain(self, q_start, q_goal, v_0):
+        p = []
+        v = v_0
+        q = q_start
+
+        while True:
+            p_final = self.vamp_path_vis(q, q_goal, v)
+            if p_final is not None:
+                return p + p_final
+            p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
+            p_vis = self.vavp(q, self.visibility_voxels_from_path(p_relaxed).difference(v), v)
+            if p_vis is None:
+                W = set(self.env.static_vis_grid.value_from_voxel.keys())
+                p_vis = self.tourist(q, W.difference(v), v)
+            if p_vis is None:
+                return None
+            p += p_vis
+            v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
+            q = p_vis[-1]
+
+
+    def vavp(self, q, R, v, obstructions=set()):
+        p_vis = self.tourist(q, R, v)
+        if p_vis is not None:
+            return p_vis
+        obstructions_new = obstructions.union(R)
+        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new)
+        if p_relaxed is not None:
+            p_vis = self.vavp(q, self.visibility_voxels_from_path(p_relaxed).difference(v), v, obstructions=obstructions_new)
+            if p_vis is not None:
+                return p_vis
+        return None
+
+
 
     def tourist(self, q_start, R, v_0, relaxed=False, obstructions=set()):
         q_goal = None

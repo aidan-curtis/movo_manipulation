@@ -154,6 +154,13 @@ class Environment(ABC):
             self.default_vision[q] = self.gained_vision_from_conf(q)
 
 
+    def get_optimistic_path_vision(self, path, G):
+        vision = set()
+        for q in path:
+            vision.update(self.get_optimistic_vision(q, G))
+        return vision
+
+
 
     def get_optimistic_vision(self, q, G):
         if q in self.gained_vision:

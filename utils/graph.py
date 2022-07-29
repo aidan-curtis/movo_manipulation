@@ -132,7 +132,7 @@ class Graph:
         ax.add_collection(lc)
 
         # Draw angles of points
-        '''
+
         angle_lines = []
         for x,y,t in self.vertices:
             endy = y + 0.05 * np.sin(t)
@@ -140,7 +140,7 @@ class Graph:
             angle_lines.append(((x,y), (endx, endy)))
         lc = mc.LineCollection(angle_lines, colors='red', linewidths=2)
         ax.add_collection(lc)
-        '''
+
 
         # Draw room shape
         for wall in env.room.walls:
