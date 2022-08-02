@@ -45,6 +45,13 @@ class Environment(ABC):
 
 
     def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
+        """
+        Given an image from the camera updates all the detected objects that are labeled as movable.
+
+        Args:
+            camera_image: The taken image from the camera.
+            ignore_obstacles (list): A list of obstacles that will not be taken into account when updating.
+        """
         relevant_cloud = [lp for lp in iterate_point_cloud(camera_image, **kwargs)
                           if aabb_contains_point(lp.point, self.room.aabb)
                           ]
@@ -87,6 +94,13 @@ class Environment(ABC):
 
 
     def update_occupancy(self, camera_image, ignore_obstacles=[], **kwargs):
+        """
+        Updates the occupancy grid based on an image input.
+
+        Args:
+            camera_image: The taken image from the camera.
+            ignore_obstacles (list): A list of obstacles that will not be taken into account when updating.
+        """
         relevant_cloud = [lp for lp in iterate_point_cloud(camera_image, **kwargs)
                           if aabb_contains_point(lp.point, self.room.aabb)]
 
@@ -98,11 +112,22 @@ class Environment(ABC):
 
 
     def update_visibility(self, camera_pose, camera_image, q):
+        """
+        Updates the visibility grid based on a camera image.
+
+        Args:
+            camera_pose (tuple): Pose of the camera in the world frame.
+            camera_image: The taken image from the camera.
+            q (tuple): Robot configuration corresponding to the taken image.
+        Returns:
+            set: The gained vision obtaining from the given image.
+        """
         surface_aabb = self.visibility_grid.aabb
         camera_pose, camera_matrix = camera_image[-2:]
         grid = self.visibility_grid
         self.gained_vision[q] = set()
 
+        # For each voxel in the grid, check whether it was seen in the image
         for voxel in grid.voxels_from_aabb(surface_aabb):
             center_world = grid.to_world(grid.center_from_voxel(voxel))
             center_camera = tform_point(invert(camera_pose), center_world)
@@ -119,6 +144,9 @@ class Environment(ABC):
 
 
     def setup_grids(self):
+        """
+        Setups the occupancy, visibility, and movable objects grids.
+        """
         self.setup_occupancy_grid()
         self.setup_visibility_grid()
         self.setup_movable_boxes()
@@ -126,11 +154,15 @@ class Environment(ABC):
 
 
     def setup_visibility_grid(self):
+        """
+        Setups the visibility grids.
+        """
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
-        # surface_aabb = self.room.aabb
         surface_aabb = AABB(lower=self.room.aabb.lower+np.array([-1, -1, 0]),
                             upper=(self.room.aabb.upper[0]+1, self.room.aabb.upper[1]+1, GRID_RESOLUTION))
+        # Defines two grids, one for visualization, and a second one for keeping track of regions during
+        # planning.
         grid = VoxelGrid(
             resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
         )
@@ -146,8 +178,15 @@ class Environment(ABC):
         self.gained_vision = dict()
 
 
-
     def setup_default_vision(self, G):
+        """
+        Setups a map of base configurations to viewed voxels.
+
+        Args:
+            G (object): Graph object defining how our space is discretized.
+        """
+        # Since movements are currently defined as translations along the axis, we can use a set of default
+        # visions and only translating in space to improve the running time.
         self.default_vision = dict()
         for i in range(G.t_step):
             q = (0, 0, round(i*2*np.pi/G.t_step, 3))
@@ -155,6 +194,16 @@ class Environment(ABC):
 
 
     def get_optimistic_path_vision(self, path, G):
+        """
+        Gets optimistic vision along a path. Optimistic vision is defined as the vision cone from a certain
+        configuration, unless the configuration has already been viewed and the actual vision is known.
+
+        Args:
+            path (list): The path to which vision is to be determined.
+            G (object): Graph object defining how our space is discretized.
+        Returns:
+            set: A set of voxels that correspond to the gained vision.
+        """
         vision = set()
         for q in path:
             vision.update(self.get_optimistic_vision(q, G))
@@ -163,11 +212,22 @@ class Environment(ABC):
 
 
     def get_optimistic_vision(self, q, G):
+        """
+        Gets the optimistic vision of a specified configuration. Optimistic vision is defined as
+        the vision cone from a certain configuration, unless the configuration has already been
+        viewed and the actual vision is known.
+
+        Args:
+            q (tuple): The robot configuration.
+            G (object): Graph object defining how our space is discretized.
+        Returns:
+            set: A set of voxels that correspond to the gained vision.
+        """
+        # If we have already reached the configuration, return the obtained vision.
         if q in self.gained_vision:
             return self.gained_vision[q]
 
-        self.vis_table = dict()
-
+        # Look for the corresponding default vision and transform the voxels accordingly.
         default_one = self.default_vision[(0, 0, round(q[2],3))]
         resulting_voxels = set()
         for voxel in default_one:
@@ -182,12 +242,25 @@ class Environment(ABC):
 
 
     def update_vision_from_voxels(self, voxels):
+        """
+        Given a set of voxels, mark them as viewed in the visibility grid.
+
+        Args:
+            voxels (set): Voxels to mark as viewed
+        """
         for voxel in voxels:
             self.visibility_grid.set_free(voxel)
 
 
     def gained_vision_from_conf(self, q):
+        """
+        Given a configuration, compute the voxels corresponding to the cone of vision.
 
+        Args:
+            q (tuple): The robot configuration.
+        Returns:
+            set: A set of voxels that correspond to the gained vision.
+        """
         grid = self.static_vis_grid
         voxels = set()
         pose = Pose(point=Point(x=q[0], y=q[1], z=0), euler=[0, 0, q[2]])
@@ -207,6 +280,9 @@ class Environment(ABC):
 
 
     def setup_occupancy_grid(self):
+        """
+        Setups the occupancy grid to detect obstacles.
+        """
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
         surface_aabb = self.room.aabb
@@ -216,13 +292,25 @@ class Environment(ABC):
         self.occupancy_grid = grid
 
     def setup_movable_boxes(self):
+        """
+        Setups the movable objects data structure.
+        """
         self.movable_boxes = []
 
     def set_defaults(self, robot):
+        """
+        Sets the robot joints to their default configuration.
+
+        Args:
+            robot (int): The id of the robot object in the environment.
+        """
         joints, values = zip(*[(joint_from_name(robot, k), v) for k, v in DEFAULT_JOINTS.items()])
         set_joint_positions(robot, joints, values)
 
     def setup_robot(self):
+        """
+        Setups the robot object for manipulation and visualization in the virtual environment.
+        """
         MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
         MOVO_PATH = os.path.abspath(MOVO_URDF)
         robot_body = load_pybullet(MOVO_PATH, fixed_base=True)
@@ -234,14 +322,22 @@ class Environment(ABC):
         return robot_body
 
     def plot_grids(self, visibility=False, occupancy=False, movable=False):
+        """
+        Visualizes the different grids in the simulation based on the specified parameters.
+
+        Args:
+            visibility (bool): Whether to show the visibility grid or not.
+            occupancy (bool): Whether to show the occupancy grid or not.
+            movable (bool): Whether to show the detected movable objects or not
+        """
         movable_handles = []
         with LockRenderer():
             p.removeAllUserDebugItems()
-            if (visibility):
+            if visibility:
                 self.visibility_grid.draw_intervals()
-            if (occupancy):
+            if occupancy:
                 self.occupancy_grid.draw_intervals()
-            if (movable):
+            if movable:
                 for movable_box in self.movable_boxes:
                     draw_oobb(movable_box, color=YELLOW)
         return
@@ -249,6 +345,9 @@ class Environment(ABC):
     def get_robot_vision(self):
         """
         Gets the rgb and depth image of the robot
+
+        Returns:
+            The pose of the camera and the captured image.
         """
 
         # 13 is the link of the optical frame of the rgb camera
@@ -260,6 +359,18 @@ class Environment(ABC):
         return camera_pose, camera_image
 
     def create_closed_room(self, length, width, center=[0, 0], wall_height=2, movable_obstacles=[]):
+        """
+        Creates a default closed room in the simulation environment.
+
+        Args:
+            length (float): Length of the room.
+            width (float): Width of the room.
+            center : The center of the room. Used mainly to move the robot without changing the frame of reference.
+            wall_height (float): Height of the walls.
+            movable_obstacles (list): A list of movable objects to include in the environment.
+        Returns:
+            A Room object created in simulation.
+        """
 
         floor = self.create_pillar(width=width, length=length, color=TAN)
         set_pose(floor, Pose(Point(x=center[0], y=center[1])))
@@ -282,41 +393,100 @@ class Environment(ABC):
         return Room([wall_1, wall_2, wall_3, wall_4], [floor], aabb, movable_obstacles)
 
     def create_pillar(self, width=0.25, length=0.25, height=1e-3, color=None, **kwargs):
+        """
+        Creates a pillar which translates to creating a box in the simulation of the specified dimensions.
+
+        Args:
+            width (float): The width of the pillar.
+            length (float): The length of the pillar.
+            height (float): The height of the pillar.
+            color : The specified color of the pillar.
+        Returns:
+            A box object created in simulation.
+        """
         return create_box(w=width, l=length, h=height, color=color, **kwargs)
 
     def get_centered_aabb(self):
+        """
+        Gets the aabb of the current position of the robot centered around the origin.
+
+        Returns:
+            The centered aabb.
+        """
         # TODO: Using the base aabb for simplicity. Change later
         centered_aabb, _ = recenter_oobb((get_aabb(self.robot, link=4), Pose()))
         centered_aabb.lower[2] += centered_aabb.upper[2]
         centered_aabb.upper[2] += centered_aabb.upper[2]
-        #centered_aabb.lower[1] = centered_aabb.lower[0]
-        #centered_aabb.upper[1] = centered_aabb.upper[0]
+        # Uncmmment these lines if you want the aabb to account for rotations.
+        # centered_aabb.lower[1] = centered_aabb.lower[0]
+        # centered_aabb.upper[1] = centered_aabb.upper[0]
         return centered_aabb
 
 
     def get_centered_oobb(self):
+        """
+        Gets the oobb of the current position of the robot centered around the origin.
+
+        Returns:
+            The centered oobb.
+        """
         # TODO: Using the base aabb for simplicity. Change later
         aabb = get_aabb(self.robot, link=4)
         centered_aabb, pose = recenter_oobb((aabb, Pose()))
         return OOBB(centered_aabb, pose)
 
 
-    def oobb_from_q(self, q):
-        oobb = self.centered_oobb
-        pose = Pose(point=Point(x=q[0], y=q[1], z=oobb.pose[0][2]), euler=[0,0,q[2]])
-        return OOBB(oobb.aabb, pose)
-
     def aabb_from_q(self, q):
+        """
+        Gets the aabb of the specified configuration.
+
+        Args:
+            q (tuple): Configuration of the robot.
+        Returns:
+            The aabb at the given configuration.
+        """
         aabb = aabb_from_oobb(self.oobb_from_q(q))
         aabb.upper[2] += 0.5
         return aabb
 
 
+    def oobb_from_q(self, q):
+        """
+        Gets the oobb of the specified configuration.
+
+        Args:
+            q (tuple): Configuration of the robot.
+        Returns:
+            The oobb at the given configuration.
+        """
+        oobb = self.centered_oobb
+        pose = Pose(point=Point(x=q[0], y=q[1], z=oobb.pose[0][2]), euler=[0,0,q[2]])
+        return OOBB(oobb.aabb, pose)
+
+
 def distance(vex1, vex2):
+    """
+    Helper function that returns the Euclidean distance between two tuples of size 2.
+
+    Args:
+        vex1 (tuple): The first tuple
+        vex2 (tuple): The second tuple
+    Returns:
+        float: The Euclidean distance between both tuples.
+    """
     return ((vex1[0] - vex2[0]) ** 2 + (vex1[1] - vex2[1]) ** 2) ** 0.5
 
 
 def find_min_angle(beg, end):
+    """
+    Finds the minimum angle between two angles. (Angle between -PI and PI)
+
+    Args:
+        beg (float): Starting angle.
+        end (float): End angle.
+    Returns:
+        float: Minimum angle between both angles.
+    """
     if beg > np.pi:
         beg = beg - 2 * np.pi
     if end > np.pi:
