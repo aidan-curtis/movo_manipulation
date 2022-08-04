@@ -11,7 +11,7 @@ import scipy.spatial
 import pickle
 
 from utils.graph import Graph
-from environments.vamp_environment import GRID_RESOLUTION
+from environments.vamp_environment import GRID_RESOLUTION, find_min_angle
 
 
 class Vamp(Planner):
@@ -120,14 +120,17 @@ class Vamp(Planner):
             p_final = self.vamp_path_vis(q, q_goal, v)
             if p_final is not None:
                 return p + p_final
+            print("Couldn't find a direct path. Looking for a relaxed one")
             # If a path to goal can't be found, find a relaxed path and use it as a subgoal
             p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
             p_vis = self.vavp(q, self.visibility_voxels_from_path(p_relaxed).difference(v), v)
             # If the relaxed version fails, explore some of the environment. And restart the search
             if p_vis is None:
+                print("P_VIS failed. Observing some of the environment")
                 W = set(self.env.static_vis_grid.value_from_voxel.keys())
                 p_vis = self.tourist(q, W.difference(v), v)
             if p_vis is None:
+                print("P_VIS failed again. Aborting")
                 return None
             p += p_vis
             v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
@@ -467,8 +470,11 @@ class Vamp(Planner):
                 paths.append((best_path + [action[0]], best_path_cost+ action[1], H(action[0])))
 
             # Only sorting from heuristic. Faster but change if needed
-            paths = sorted(paths, key=lambda x: x[-1], reverse=True)
+            paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
 
+        done = time.clock_gettime_ns(0) - current_t
+        print(done * (10 ** (-9)))
+        self.G.plot_search(self.env, extended)
         return None
 
 
@@ -539,8 +545,20 @@ class Vamp(Planner):
 
 
 def distance(vex1, vex2):
+    """
+    Helper function that returns the Euclidean distance between two configurations.
+    It uses a "fudge" factor for the relationship between angles and distances.
+
+    Args:
+        vex1 (tuple): The first tuple
+        vex2 (tuple): The second tuple
+    Returns:
+        float: The Euclidean distance between both tuples.
+    """
+    R = 0.01
     dist = 0
     for i in range(len(vex1)-1):
         dist += (vex1[i] - vex2[i])**2
+    dist += (R*find_min_angle(vex1[2], vex2[2]))**2
     return dist**0.5
 

@@ -15,7 +15,7 @@ class SingleHallway(Environment):
         super(SingleHallway, self).__init__()
 
         self.start = (0, 0, 0)
-        self.goal = (3, 0, np.pi/2)  # TODO: Create separate class for configuration space
+        self.goal = (2.4, 0, round(np.pi/2,3))  # TODO: Create separate class for configuration space
         self.objects = []
         self.viewed_voxels = []
 
@@ -70,9 +70,9 @@ class SingleHallway(Environment):
         set_pose(wall_4,
                  Pose(point=Point(y=center[1], x=center[0] - (width / 2 + wall_thickness / 2), z=wall_height / 2)))
 
-        wall_5 = self.create_pillar(length=4, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
+        wall_5 = self.create_pillar(length=3.9, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_5,
-                 Pose(point=Point(y=1, x=2, z=wall_height / 2)))
+                 Pose(point=Point(y=1, x=1.7, z=wall_height / 2)))
 
         walls = [wall_1, wall_2, wall_3, wall_4, wall_5]
         floors = [floor1]
