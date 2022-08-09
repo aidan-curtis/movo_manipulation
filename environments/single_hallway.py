@@ -72,7 +72,7 @@ class SingleHallway(Environment):
 
         wall_5 = self.create_pillar(length=3.9, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_5,
-                 Pose(point=Point(y=1, x=1.7, z=wall_height / 2)))
+                 Pose(point=Point(y=0.95, x=1.7, z=wall_height / 2)))
 
         walls = [wall_1, wall_2, wall_3, wall_4, wall_5]
         floors = [floor1]
