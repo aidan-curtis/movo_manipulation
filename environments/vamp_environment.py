@@ -101,8 +101,10 @@ class Environment(ABC):
             camera_image: The taken image from the camera.
             ignore_obstacles (list): A list of obstacles that will not be taken into account when updating.
         """
+        occ_aabb = AABB(lower=(self.room.aabb[0][0]-1, self.room.aabb[0][1]-1, self.room.aabb[0][2]),
+                        upper=(self.room.aabb[1][0]+1, self.room.aabb[1][1]+1, self.room.aabb[1][2]))
         relevant_cloud = [lp for lp in iterate_point_cloud(camera_image, **kwargs)
-                          if aabb_contains_point(lp.point, self.room.aabb)]
+                          if aabb_contains_point(lp.point, occ_aabb)]
 
         for labeled_point in relevant_cloud:
             if labeled_point.label[0] not in ignore_obstacles:
@@ -236,9 +238,111 @@ class Environment(ABC):
             new_voxel = np.rint(np.array(new_voxel_w)/np.array(G.res))
             new_voxel = (new_voxel[0], new_voxel[1], 0)
             if self.static_vis_grid.contains(new_voxel):
-                resulting_voxels.add((new_voxel[0], new_voxel[1], 0))
+                resulting_voxels.add(new_voxel)
 
-        return resulting_voxels
+        # Only filter those voxels that are not obstructed by an occupied voxel
+        # that has already been detected
+        final_voxels = set()
+        pose = Pose(point=Point(x=q[0], y=q[1], z=0), euler=[0, 0, q[2]])
+        camera_pose = multiply(pose, self.camera_pose)
+        for voxel in resulting_voxels:
+            result = self.check_voxel_path_coll(voxel,
+                                                self.occupancy_grid.voxel_from_point(camera_pose[0]),
+                                                self.occupancy_grid)
+            if result[1]:
+                final_voxels.add(voxel)
+        return final_voxels
+
+    def check_voxel_path_coll(self, start_cell, goal_cell, grid):
+        """
+        Check for path between two cells in a grid using Bresenham's Algorithm and decide
+        if a cell in the path is occupied, therefore colliding.
+
+        Args:
+            start_cell (tuple): the starting voxel
+            goal_cell (tuple): the goal voxel
+            grid (object): the voxel grid where the voxels are present
+        Returns:
+            - The path from start to goal voxel and a bool representing whether a collision
+              was found.
+        """
+        x1, y1, z1 = start_cell
+        x2, y2, z2 = goal_cell
+        ListOfPoints = []
+        if grid.contains((x1, y1, z1)):
+            return ListOfPoints, False
+        ListOfPoints.append((x1, y1, z1))
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        dz = abs(z2 - z1)
+        if (x2 > x1):
+            xs = 1
+        else:
+            xs = -1
+        if (y2 > y1):
+            ys = 1
+        else:
+            ys = -1
+        if (z2 > z1):
+            zs = 1
+        else:
+            zs = -1
+
+        # Driving axis is X-axis"
+        if (dx >= dy and dx >= dz):
+            p1 = 2 * dy - dx
+            p2 = 2 * dz - dx
+            while (x1 != x2):
+                x1 += xs
+                if (p1 >= 0):
+                    y1 += ys
+                    p1 -= 2 * dx
+                if (p2 >= 0):
+                    z1 += zs
+                    p2 -= 2 * dx
+                p1 += 2 * dy
+                p2 += 2 * dz
+                ListOfPoints.append((x1, y1, z1))
+                if grid.contains((x1, y1, z1)):
+                    return ListOfPoints, False
+
+        # Driving axis is Y-axis"
+        elif (dy >= dx and dy >= dz):
+            p1 = 2 * dx - dy
+            p2 = 2 * dz - dy
+            while (y1 != y2):
+                y1 += ys
+                if (p1 >= 0):
+                    x1 += xs
+                    p1 -= 2 * dy
+                if (p2 >= 0):
+                    z1 += zs
+                    p2 -= 2 * dy
+                p1 += 2 * dx
+                p2 += 2 * dz
+                ListOfPoints.append((x1, y1, z1))
+                if grid.contains((x1, y1, z1)):
+                    return ListOfPoints, False
+
+        # Driving axis is Z-axis"
+        else:
+            p1 = 2 * dy - dz
+            p2 = 2 * dx - dz
+            while (z1 != z2):
+                z1 += zs
+                if (p1 >= 0):
+                    y1 += ys
+                    p1 -= 2 * dz
+                if (p2 >= 0):
+                    x1 += xs
+                    p2 -= 2 * dz
+                p1 += 2 * dy
+                p2 += 2 * dx
+                ListOfPoints.append((x1, y1, z1))
+                if grid.contains((x1, y1, z1)):
+                    return ListOfPoints, False
+
+        return ListOfPoints, True
 
 
     def update_vision_from_voxels(self, voxels):
@@ -274,7 +378,7 @@ class Environment(ABC):
                 voxel_pos = grid.pose_from_voxel(voxel)[0]
                 dist = distance(voxel_pos, camera_pose[0])
 
-                if dist < FAR:
+                if dist <= FAR:
                     voxels.add(voxel)
         return voxels
 

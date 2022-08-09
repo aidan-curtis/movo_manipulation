@@ -364,7 +364,7 @@ class Vamp(Planner):
         for voxel in grid.voxels_from_aabb(surface_aabb):
             actual_q = (q[0], q[1], 0)
             actual_vox = np.array(voxel) * np.array(self.G.res)
-            if distance(actual_vox, actual_q) < radius:
+            if distance(actual_vox, actual_q) <= radius:
                 voxels.add(voxel)
         return voxels
 

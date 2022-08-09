@@ -3,6 +3,7 @@ from matplotlib import collections  as mc
 from matplotlib.patches import Rectangle, Arrow
 import numpy as np
 from pybullet_planning.pybullet_tools.utils import get_aabb, wait_if_gui
+from environments.vamp_environment import GRID_RESOLUTION
 
 
 class Graph:
@@ -243,7 +244,7 @@ class Graph:
 
 
 
-    def plot_search(self, env, extended, path=None):
+    def plot_search(self, env, extended, path=None, R=set()):
         """
         Visualizes the finished search by visualizing all the nodes it extended.
 
@@ -251,6 +252,7 @@ class Graph:
             env (object): The environment where the graph is constructed.
             extended (set): A set of nodes that were extended by the search
             path (list): A path in the graph to highlight.
+            R (set): Area of interest to visualize
         """
         fig, ax = plt.subplots()
         # Draw room shape
@@ -295,6 +297,12 @@ class Graph:
             paths = [(path[i][0:2], path[i + 1][0:2]) for i in range(len(path) - 1)]
             lc2 = mc.LineCollection(paths, colors='blue', linewidths=3)
             ax.add_collection(lc2)
+
+        if R is not None:
+            px = [p[0]*GRID_RESOLUTION for p in R]
+            py = [p[1]*GRID_RESOLUTION for p in R]
+            ax.scatter(px, py, c='black', marker="s")
+
 
         ax.autoscale()
         ax.margins(0.1)
