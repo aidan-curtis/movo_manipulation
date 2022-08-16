@@ -52,6 +52,8 @@ class Vamp(Planner):
         """
         q_start, q_goal = self.env.start, self.env.goal
 
+        v = self.env.lidar_scan(q_start)
+
         # Gets initial vision and updates the current vision based on it
         self.v_0 = self.get_circular_vision(q_start)
         self.env.update_vision_from_voxels(self.v_0)
@@ -60,7 +62,7 @@ class Vamp(Planner):
         # visibility and occupancy grids. Visualize them for convenience.
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
-        self.env.update_occupancy(image_data)
+        self.env.update_occupancy(q_start, image_data)
         self.env.plot_grids(True, True, True)
 
         self.complete = False
@@ -500,7 +502,7 @@ class Vamp(Planner):
 
             # Get updated occupancy grid at each step
             camera_pose, image_data = self.env.get_robot_vision()
-            self.env.update_occupancy(image_data)
+            self.env.update_occupancy(q, image_data)
             self.env.update_movable_boxes(image_data)
             gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
 

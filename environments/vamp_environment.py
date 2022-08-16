@@ -93,7 +93,7 @@ class Environment(ABC):
         self.movable_boxes = all_new_boxes
 
 
-    def update_occupancy(self, camera_image, ignore_obstacles=[], **kwargs):
+    def update_occupancy(self, q, camera_image, ignore_obstacles=[], **kwargs):
         """
         Updates the occupancy grid based on an image input.
 
@@ -106,12 +106,59 @@ class Environment(ABC):
         relevant_cloud = [lp for lp in iterate_point_cloud(camera_image, **kwargs)
                           if aabb_contains_point(lp.point, occ_aabb)]
 
+        # Get collision from vision
         for labeled_point in relevant_cloud:
             if labeled_point.label[0] not in ignore_obstacles:
                 if labeled_point.label[1] == -1:
                     point = labeled_point.point
                     self.occupancy_grid.add_point(point)
+        # Get collision from lidar
+        for voxel in self.lidar_scan(q):
+            self.occupancy_grid.set_occupied(voxel)
 
+    def lidar_scan(self, q, radius=3, angle=2*np.pi):
+        """
+        Gets the obstruction voxels from a lidar scan at a certain distance and
+        angle from the base of the robot.
+
+        Args:
+            q (tuple): Center of the scan.
+            radius (float): Radius of the scan.
+            angle (float): Swept angle. The bisector of the angle will always be pointing
+                           towards the front of the robot. Between 0 and 2PI.
+        Returns:
+            set: A set of voxels representing the obstructions found from the lidar scan.
+        """
+        # Get the angles to step to find collisions
+        step = np.pi/36
+        angles = [q[2] + step*x for x in range(int(angle/(2*step))+1)]
+        angles += [q[2] - step*x for x in range(1, int(angle/(2*step))+1)]
+
+        voxels = set()
+        for angle in angles:
+            # Get point along the circumference
+            vox_q = q + np.array([radius*np.cos(angle), radius*np.sin(angle), 0])
+            vox_q[2] = 0.25
+            vox = self.occupancy_grid.voxel_from_point(vox_q)
+            robot_vox = self.occupancy_grid.voxel_from_point([q[0], q[1], 0.25])
+            # Ray cast to the intended position in the circumference.
+            path = self.check_voxel_path_coll(robot_vox, vox, self.occupancy_grid)
+            if not path[1]:
+                flag = False
+                for voxel in path[0]:
+                    if flag:
+                        break
+                    # Check for the first obstacle to intersect.
+                    vox_aabb = self.occupancy_grid.aabb_from_voxel(voxel)
+                    vox_aabb = AABB(lower=vox_aabb[0] + np.ones(3) * 0.01,
+                                    upper=vox_aabb[1] - np.ones(3) * 0.01)
+                    for elem in self.room.walls + self.objects:
+                        obj_aabb = get_aabb(elem)
+                        if aabb_overlap(obj_aabb, vox_aabb):
+                            voxels.add(voxel)
+                            flag = True
+                            break
+        return voxels
 
     def update_visibility(self, camera_pose, camera_image, q):
         """
@@ -249,7 +296,7 @@ class Environment(ABC):
             result = self.check_voxel_path_coll(voxel,
                                                 self.occupancy_grid.voxel_from_point(camera_pose[0]),
                                                 self.occupancy_grid)
-            if result[1]:
+            if not result[1]:
                 final_voxels.add(voxel)
         return final_voxels
 
@@ -270,7 +317,7 @@ class Environment(ABC):
         x2, y2, z2 = goal_cell
         ListOfPoints = []
         if grid.contains((x1, y1, z1)):
-            return ListOfPoints, False
+            return ListOfPoints, True
         ListOfPoints.append((x1, y1, z1))
         dx = abs(x2 - x1)
         dy = abs(y2 - y1)
@@ -304,7 +351,7 @@ class Environment(ABC):
                 p2 += 2 * dz
                 ListOfPoints.append((x1, y1, z1))
                 if grid.contains((x1, y1, z1)):
-                    return ListOfPoints, False
+                    return ListOfPoints, True
 
         # Driving axis is Y-axis"
         elif (dy >= dx and dy >= dz):
@@ -322,7 +369,7 @@ class Environment(ABC):
                 p2 += 2 * dz
                 ListOfPoints.append((x1, y1, z1))
                 if grid.contains((x1, y1, z1)):
-                    return ListOfPoints, False
+                    return ListOfPoints, True
 
         # Driving axis is Z-axis"
         else:
@@ -340,9 +387,9 @@ class Environment(ABC):
                 p2 += 2 * dx
                 ListOfPoints.append((x1, y1, z1))
                 if grid.contains((x1, y1, z1)):
-                    return ListOfPoints, False
+                    return ListOfPoints, True
 
-        return ListOfPoints, True
+        return ListOfPoints, False
 
 
     def update_vision_from_voxels(self, voxels):
