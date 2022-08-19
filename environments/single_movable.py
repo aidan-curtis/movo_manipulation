@@ -1,4 +1,4 @@
-from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from environments.vamp_environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 
 from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
@@ -65,12 +65,12 @@ class SingleMovable(Environment):
                                                  chair_aabb.upper[2] - chair_aabb.lower[2],
                                                  1]
 
-            #self.room = self.create_closed_room(length=6, width=10, center = [3,2], movable_obstacles=[blocking_chair])
             self.room = self.create_room(movable_obstacles=[blocking_chair])
             self.objects += [blocking_box, blocking_chair]
             self.static_objects = [blocking_box]
-            self.centered_aabb = self.get_centered_aabb()
             self.setup_grids()
+            self.centered_aabb = self.get_centered_aabb()
+            self.centered_oobb = self.get_centered_oobb()
 
     def create_room(self, movable_obstacles=[]):
         width = 10

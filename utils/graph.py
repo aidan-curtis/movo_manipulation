@@ -88,11 +88,11 @@ class Graph:
             y = env.room.aabb.lower[1]-resolution[1]
             x += resolution[0]
             for j in range(self.y_step):
-                y+= resolution[1]
+                y += resolution[1]
                 t = -resolution[2]
                 for k in range(self.t_step):
-                    t+= resolution[2]
-                    self.add_vex((round(x,2),round(y,2),round(t, 3)))
+                    t += resolution[2]
+                    self.add_vex((round(x, 2), round(y, 2), round(t, 3)))
 
         # Adds the edges to make the graph 6-connected. Moving horizontally and vertically as well
         # as turning a certain angle to both sides.
@@ -244,7 +244,7 @@ class Graph:
 
 
 
-    def plot_search(self, env, extended, path=None, R=set()):
+    def plot_search(self, env, extended, path=None, R=set(), goal=None):
         """
         Visualizes the finished search by visualizing all the nodes it extended.
 
@@ -302,6 +302,9 @@ class Graph:
             px = [p[0]*GRID_RESOLUTION for p in R]
             py = [p[1]*GRID_RESOLUTION for p in R]
             ax.scatter(px, py, c='black', marker="s")
+
+        if goal is not None:
+            ax.scatter(goal[0], goal[1], c="black")
 
 
         ax.autoscale()

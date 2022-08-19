@@ -3,6 +3,7 @@ from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
 from planners.vamp import Vamp
+from planners.nameless import Nameless
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
@@ -19,6 +20,7 @@ PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
             "rrt": RRT,
             "vamp": Vamp,
+            "nameless": Nameless,
             "do_nothing": DoNothing}
 
 ENVIRONMENTS = {"empty": Empty,
