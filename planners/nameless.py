@@ -66,7 +66,6 @@ class Nameless(Planner):
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
         self.env.update_occupancy(q_start, image_data)
-        self.env.update_movable_boxes(image_data)
         self.env.plot_grids(True, True, True)
 
         self.complete = False
@@ -98,10 +97,10 @@ class Nameless(Planner):
             self.v_0.update(gained_vision)
 
             # Ask for whether the user wants to save the current state to load it in the future.
-            print("Want to save this state? Press Y or N then Enter")
-            x = input()
-            if x == "Y" or x == "y":
-                self.save_state()
+            # print("Want to save this state? Press Y or N then Enter")
+            # x = input()
+            # if x == "Y" or x == "y":
+            self.save_state()
 
         print("Reached the goal")
         wait_if_gui()
@@ -380,7 +379,7 @@ class Nameless(Planner):
             q_rand = self.G.rand_vex()
             # Check collisions with obstacle and movable objects if required
             collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
-            if not collisions and (ignore_movable or coll_objects is None):
+            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
                 new_score = len(self.env.get_optimistic_vision(q_rand, self.G).intersection(R))
                 if new_score != 0:
                     if new_score > score:
@@ -404,29 +403,29 @@ class Nameless(Planner):
 
         return self.vamp_path_vis(q_start, q_goal, v_0, H=heuristic_fn, relaxed=relaxed, obstructions=obstructions)
 
-    def vamp_step_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set(),
-                      ignore_movable=False, attachment=None):
-        """
-        Helper function to initialize the search. Uses the vision constraint on each node based
-        on the vision gained from the previous step only.
+    # def vamp_step_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set(),
+    #                   ignore_movable=False, attachment=None):
+    #     """
+    #     Helper function to initialize the search. Uses the vision constraint on each node based
+    #     on the vision gained from the previous step only.
 
-        Args:
-            q_start (tuple): Starting position of the robot.
-            q_goal (tuple): Goal position where the planning is ended.
-            v_0 (set) : Set of tuples that define the already seen space.
-            H (function): Function defining the heuristic used during A* search.
-            relaxed (bool): Defines whether the path can relax the vision constraint.
-            obstructions (set): Set of tuples that define the space that the robot can't occupy.
-            ignore_movable (bool): Whether to ignore collisions with movable objects or not.
-            attachment (list): A list of an attached object's oobb and its attachment grasp.
-        Returns:
-            list: The suggested path that goes from start to goal.
-        """
-        if H == 0:
-            H = lambda x: distance(x, q_goal)
+    #     Args:
+    #         q_start (tuple): Starting position of the robot.
+    #         q_goal (tuple): Goal position where the planning is ended.
+    #         v_0 (set) : Set of tuples that define the already seen space.
+    #         H (function): Function defining the heuristic used during A* search.
+    #         relaxed (bool): Defines whether the path can relax the vision constraint.
+    #         obstructions (set): Set of tuples that define the space that the robot can't occupy.
+    #         ignore_movable (bool): Whether to ignore collisions with movable objects or not.
+    #         attachment (list): A list of an attached object's oobb and its attachment grasp.
+    #     Returns:
+    #         list: The suggested path that goes from start to goal.
+    #     """
+    #     if H == 0:
+    #         H = lambda x: distance(x, q_goal)
 
-        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_step, obstructions=obstructions,
-                           ignore_movable=ignore_movable, attachment=attachment)
+    #     return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_step, obstructions=obstructions,
+    #                        ignore_movable=ignore_movable, attachment=attachment)
 
     def vamp_path_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set(),
                       ignore_movable=False, attachment=None):
@@ -452,59 +451,59 @@ class Nameless(Planner):
         return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_path, obstructions=obstructions,
                            ignore_movable=ignore_movable, attachment=attachment)
 
-    def action_fn_step(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
-                       ignore_movable=False, attachment=None):
-        """
-        Helper function to the search, that given a node, it gives all the possible actions to take with
-        the inquired cost of each. Uses the vision constraint on each node based
-        on the vision gained from the previous step only.
+    # def action_fn_step(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
+    #                    ignore_movable=False, attachment=None):
+    #     """
+    #     Helper function to the search, that given a node, it gives all the possible actions to take with
+    #     the inquired cost of each. Uses the vision constraint on each node based
+    #     on the vision gained from the previous step only.
 
-        Args:
-            path (list): The path obtained to reach the current node on the search.
-            v_0 (set): Set of tuples that define the already seen space.
-            relaxed (bool): Defines whether the path can relax the vision constraint.
-            extended (set): Set of nodes that were already extended by the search.
-            obstructions (set): Set of tuples that define the space that the robot can't occupy.
-            ignore_movable (bool): Whether to ignore collisions with movable objects or not.
-            attachment (list): A list of an attached object's oobb and its attachment grasp.
-        Returns:
-            list: A list of available actions with the respective costs.
-        """
-        actions = []
-        q = path[-1]
-        # Retrieve all the neighbors of the current node based on the graph of the space.
-        for q_prime_i in self.G.neighbors[self.G.vex2idx[q]]:
-            q_prime = self.G.vertices[q_prime_i]
-            # If the node has already been extended do not consider it.
-            if q_prime in extended:
-                continue
-            if relaxed:
-                # Check for whether the new node is in obstruction with any obstacle.
-                collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
-                                                                          ignore_movable=ignore_movable,
-                                                                          attachment=attachment)
-                if not collisions and (ignore_movable or coll_objects is None):
-                    v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
-                    s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
-                    # If the node follows the visibility constraint, add it normally.
-                    if s_q.issubset(v_q):
-                        actions.append((q_prime, distance(q, q_prime)))
-                    # If it does not follow the visibility constraint, add it with a special cost.
-                    else:
-                        cost = distance(q, q_prime) *\
-                                abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
-                        actions.append((q_prime, cost))
-            else:
-                # In the not relaxed case only add nodes when the visibility constraint holds.
-                collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
-                                                                          ignore_movable=ignore_movable,
-                                                                          attachment=attachment)
-                if not collisions and (ignore_movable or coll_objects is None):
-                    v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
-                    s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
-                    if s_q.issubset(v_q):
-                        actions.append((q_prime, distance(q, q_prime)))
-        return actions
+    #     Args:
+    #         path (list): The path obtained to reach the current node on the search.
+    #         v_0 (set): Set of tuples that define the already seen space.
+    #         relaxed (bool): Defines whether the path can relax the vision constraint.
+    #         extended (set): Set of nodes that were already extended by the search.
+    #         obstructions (set): Set of tuples that define the space that the robot can't occupy.
+    #         ignore_movable (bool): Whether to ignore collisions with movable objects or not.
+    #         attachment (list): A list of an attached object's oobb and its attachment grasp.
+    #     Returns:
+    #         list: A list of available actions with the respective costs.
+    #     """
+    #     actions = []
+    #     q = path[-1]
+    #     # Retrieve all the neighbors of the current node based on the graph of the space.
+    #     for q_prime_i in self.G.neighbors[self.G.vex2idx[q]]:
+    #         q_prime = self.G.vertices[q_prime_i]
+    #         # If the node has already been extended do not consider it.
+    #         if q_prime in extended:
+    #             continue
+    #         if relaxed:
+    #             # Check for whether the new node is in obstruction with any obstacle.
+    #             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
+    #                                                                       ignore_movable=ignore_movable,
+    #                                                                       attachment=attachment)
+    #             if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
+    #                 v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+    #                 s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
+    #                 # If the node follows the visibility constraint, add it normally.
+    #                 if s_q.issubset(v_q):
+    #                     actions.append((q_prime, distance(q, q_prime)))
+    #                 # If it does not follow the visibility constraint, add it with a special cost.
+    #                 else:
+    #                     cost = distance(q, q_prime) *\
+    #                             abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
+    #                     actions.append((q_prime, cost))
+    #         else:
+    #             # In the not relaxed case only add nodes when the visibility constraint holds.
+    #             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
+    #                                                                       ignore_movable=ignore_movable,
+    #                                                                       attachment=attachment)
+    #             if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
+    #                 v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+    #                 s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
+    #                 if s_q.issubset(v_q):
+    #                     actions.append((q_prime, distance(q, q_prime)))
+    #     return actions
 
     def action_fn_path(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
                        ignore_movable=False, attachment=None):
@@ -537,7 +536,7 @@ class Nameless(Planner):
                 collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
                                                                           ignore_movable=ignore_movable,
                                                                           attachment=attachment)
-                if not collisions and (ignore_movable or coll_objects is None):
+                if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
                     if len(path) == 1:
                         v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
                     else:
@@ -558,16 +557,11 @@ class Nameless(Planner):
                 collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
                                                                           ignore_movable=ignore_movable,
                                                                           attachment=attachment)
-                if not collisions and (ignore_movable or coll_objects is None):
-                    if len(path) == 1:
-                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
-                    else:
-                        v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G,
-                                                                                           attachment=attachment))
-                    self.vision_q[q] = v_q
-                    s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
-                    if s_q.issubset(v_q):
+                if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
+                    s_q = self.env.visibility_points_from_path([q, q_prime])
+                    if self.env.in_view_cone(s_q, path):
                         actions.append((q_prime, distance(q, q_prime)))
+
         return actions
 
 
@@ -678,12 +672,12 @@ class Nameless(Planner):
         gained_vision = set()
         for qi, q in enumerate(path):
             # Check whether the next step goes into area that is unseen.
-            next_occupied = self.env.visibility_voxels_from_path([q], attachment=attachment)
-            for voxel in next_occupied:
-                if self.env.visibility_grid.contains(voxel):
-                    qi = qi-1 if qi-1 >= 0 else 0
-                    print("Stepping into unseen area. Aborting")
-                    return path[qi], False, gained_vision, None
+            # next_occupied = self.env.visibility_points_from_path([q], attachment=attachment)
+            # for voxel in next_occupied:
+            #     if self.env.visibility_grid.contains(voxel):
+            #         qi = qi-1 if qi-1 >= 0 else 0
+            #         print("Stepping into unseen area. Aborting")
+            #         return path[qi], False, gained_vision, None
 
             self.env.move_robot(q, self.joints, attachment=attachment)
 

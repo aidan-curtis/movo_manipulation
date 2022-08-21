@@ -11,7 +11,7 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb,
                                                     aabb_from_points, OOBB, ray_from_pixel,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
-                                                    remove_handles, get_pose, draw_aabb, wait_if_gui)
+                                                    tform_points, get_pose, draw_aabb, wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -20,6 +20,8 @@ import os
 import numpy as np
 from collections import namedtuple, defaultdict
 from functools import cached_property
+import time
+from scipy.spatial.transform import Rotation as R
 
 GRID_HEIGHT = 2  # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.2  # Grid resolutions
@@ -31,9 +33,9 @@ Force = namedtuple("Force", ["magnitude", "angle"])
 
 fx = 80
 fy = 80
-width = 128
-height = 128
-CAMERA_MATRIX = get_camera_matrix(width, height, fx, fy)
+CAMERA_WIDTH = 128
+CAMERA_HEIGHT = 128
+CAMERA_MATRIX = get_camera_matrix(CAMERA_WIDTH, CAMERA_HEIGHT, fx, fy)
 FAR = 3
 
 
@@ -289,6 +291,27 @@ class Environment(ABC):
         for q in path:
             vision.update(self.get_optimistic_vision(q, G, attachment=attachment))
         return vision
+
+    def in_view_cone(self, points, path):
+        if(len(points)==0):
+            return True
+        st = time.time()
+        paths_rays = []
+        for q in path:
+            pose = Pose(point=Point(x=q[0], y=q[1], z=0), euler=[0, 0, q[2]])
+            camera_pose = multiply(pose, self.camera_pose)
+            icp = invert(camera_pose)
+            rays = R.from_quat(icp[1]).as_matrix().dot(points.T).T+np.array(icp[0])            
+            mag =  np.expand_dims(rays[:, 2], 1)
+            s = CAMERA_MATRIX.dot((rays / mag).T)[:2, :]
+            paths_rays.append(np.expand_dims(np.all(((s > 0) & (s < CAMERA_HEIGHT)), axis=0), axis=0))
+
+        st = time.time()
+        paths_rays = np.concatenate(paths_rays, axis=0).astype(np.uint8)
+
+        return np.min(np.sum(paths_rays, axis=0))>0
+                    
+
 
 
 
@@ -648,20 +671,45 @@ class Environment(ABC):
         Returns:
             set: A set of voxels occupied by the path.
         """
+
         voxels = set()
+        vis_points = np.array(self.visibility_grid.occupied_points)
+        vis_voxels = np.array(self.visibility_grid.occupied_voxel_points)
+
         for q in path:
-            voxel = [x for x in self.static_vis_grid.voxels_from_aabb(self.aabb_from_q(q))
-                        if self.static_vis_grid.contains(x)]
-            voxels.update(voxel)
-
-            # In the case of having an object attached during the path, check for its collisions too.
-            if attachment is not None:
-                obj_oobb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
-                voxel = [x for x in self.static_vis_grid.voxels_from_aabb(obj_oobb.aabb)
-                         if self.static_vis_grid.contains(x)]
-                voxels.update(voxel)
-
+            aabb = self.aabb_from_q(q)
+            vis_idx = np.all( (aabb.lower<=vis_points) & (vis_points<=aabb.upper), axis=1 )
+            voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
+            # voxel = [x for x in self.env.static_vis_grid.voxels_from_aabb()
+            #             if self.env.static_vis_grid.contains(x)]
         return voxels
+        
+    def visibility_points_from_path(self, path, attachment=None):
+        """
+        Finds the set of voxels that correspond to the swept volume traversed by a path in the
+        visibility space.
+
+        Args:
+            path (list): The path traversed.
+            attachment (list): A list of an attached object's oobb and its attachment grasp.
+        Returns:
+            set: A set of voxels occupied by the path.
+        """
+
+        visibility_points = None
+        vis_points = np.array(self.visibility_grid.occupied_points)
+
+        for q in path:
+            aabb = self.aabb_from_q(q)
+            vis_idx = np.all( (aabb.lower<=vis_points) & (vis_points<=aabb.upper), axis=1 )
+
+            if(visibility_points is None):
+                visibility_points = vis_points[vis_idx]
+            else:
+                visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]] , axis=0)
+
+        return visibility_points
+
 
     def obstruction_from_path(self, path, obstruction, ignore_movable=False, attachment=None):
         """
@@ -676,35 +724,30 @@ class Environment(ABC):
         Returns:
             A set of voxels occupied by the path and the first movable object the path collides with.
         """
-        voxels = set()
+        occ_points = np.array(self.occupancy_grid.occupied_points)
+        occupancy_points = None
         movable_coll = None
+        
         for q in path:
-            # Check for obstruction of the robot with the obstacles grid.
-            robot_aabb = self.aabb_from_q(q)
-            voxel = [x for x in self.occupancy_grid.voxels_from_aabb(robot_aabb)
-                     if self.occupancy_grid.contains(x)]
-            voxels.update(voxel)
+            # Check for obstruction with the obstacles grid.
+            aabb = self.aabb_from_q(q)
+            vis_idx = np.all( (aabb.lower<=occ_points) & (occ_points<=aabb.upper), axis=1 )
 
-            # Check obstruction of the attached with obstacle grid
-            if attachment is not None:
-                obj_oobb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
-                voxel = [x for x in self.occupancy_grid.voxels_from_aabb(obj_oobb.aabb)
-                         if self.occupancy_grid.contains(x)]
-                voxels.update(voxel)
-
-            # Check for obstructions between the additional constraints and the visibility space
-            # traversed by the path.
-            voxel = obstruction.intersection(self.visibility_voxels_from_path([q], attachment))
-            voxels.update(voxel)
+            if(occupancy_points is None):
+                occupancy_points = occ_points[vis_idx]
+            else:
+                occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]] , axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:
                 for movable_box in self.movable_boxes:
-                    if aabb_overlap(movable_box.aabb, robot_aabb):
+                    if aabb_overlap(movable_box.aabb, aabb):
                         movable_coll = movable_box
                         break
 
-        return voxels, movable_coll
+        return occupancy_points, movable_coll
+        
+   
 
     def remove_movable_object(self, movable_obj):
         """
