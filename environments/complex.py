@@ -1,8 +1,10 @@
-from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+#from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.vamp_environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+
 
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
                                                     load_model, create_box, TAN, BROWN,
-                                                    LockRenderer, AABB)
+                                                    LockRenderer, AABB, get_aabb)
 import random
 import math
 import pybullet as p
@@ -14,7 +16,7 @@ class Complex(Environment):
         super(Complex, self).__init__()
 
         self.start = (0, 0, 0)
-        self.goal = (2, -4, np.pi/2) # TODO: Create separate class for configuration space
+        self.goal = (2, -4, round(np.pi/2, 3)) # TODO: Create separate class for configuration space
 
         self.objects = []
         self.viewed_voxels = []
@@ -41,9 +43,8 @@ class Complex(Environment):
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.4
                 )
-            self.room = self.create_room(movable_obstacles=[blocking_chair])
-
-
+            blocking_box = create_box(1, 2, 1, mass=1, color=BROWN)
+            self.room = self.create_room(movable_obstacles=[blocking_chair, blocking_box])
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
@@ -53,26 +54,28 @@ class Complex(Environment):
                     )
                 )
             )
+
+            set_pose(blocking_box,
+                     Pose(point=Point(
+                         x=2,
+                         y=-0.8,
+                         z=1 / 2,
+                     )
+                     )
+                     )
             chair_aabb = get_aabb(blocking_chair)
             self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
                                                  chair_aabb.upper[1] - chair_aabb.lower[1],
                                                  chair_aabb.upper[2] - chair_aabb.lower[2],
                                                  1]
 
-            blocking_box = create_box(1,2,1, mass=1, color=BROWN)
-            set_pose(blocking_box,
-                Pose(point=Point(
-                        x=2,
-                        y=-0.8,
-                        z=1/2,
-                    )
-                )
-            )
+
             self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
 
             self.objects += [blocking_box, blocking_chair]
-            self.static_objects = [blocking_box]
+            self.static_objects = []
             self.centered_aabb = self.get_centered_aabb()
+            self.centered_oobb = self.get_centered_oobb()
             self.setup_grids()
             
 

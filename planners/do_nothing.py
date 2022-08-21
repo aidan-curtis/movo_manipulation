@@ -10,7 +10,7 @@ class DoNothing(Planner):
 
         self.env = env
 
-    def get_plan(self):
+    def get_plan(self, loadfile=None):
         self.env.setup()
         G = Graph(self.env.start, self.env.goal)
         plot(G, self.env)

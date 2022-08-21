@@ -66,6 +66,7 @@ class Nameless(Planner):
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
         self.env.update_occupancy(q_start, image_data)
+        self.env.update_movable_boxes(image_data)
         self.env.plot_grids(True, True, True)
 
         self.complete = False
