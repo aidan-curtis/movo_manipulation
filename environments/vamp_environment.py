@@ -20,6 +20,7 @@ import os
 import numpy as np
 from collections import namedtuple, defaultdict
 from functools import cached_property
+import functools
 import time
 from scipy.spatial.transform import Rotation as R
 
@@ -292,23 +293,27 @@ class Environment(ABC):
             vision.update(self.get_optimistic_vision(q, G, attachment=attachment))
         return vision
 
+    @functools.lru_cache(typed=False)
+    def get_icp(self, q):
+        pose = Pose(point=Point(x=q[0], y=q[1], z=0), euler=[0, 0, q[2]])
+        camera_pose = multiply(pose, self.camera_pose)
+        ip = invert(camera_pose)
+        icp_r = R.from_quat(ip[1]).as_matrix()
+        return icp_r, np.array(ip[0]) 
+
     def in_view_cone(self, points, path):
         if(len(points)==0):
             return True
-        st = time.time()
+
         paths_rays = []
         for q in path:
-            pose = Pose(point=Point(x=q[0], y=q[1], z=0), euler=[0, 0, q[2]])
-            camera_pose = multiply(pose, self.camera_pose)
-            icp = invert(camera_pose)
-            rays = R.from_quat(icp[1]).as_matrix().dot(points.T).T+np.array(icp[0])            
+            icp_r, icp_p = self.get_icp(q)
+            rays = icp_r.dot(points.T).T+icp_p
             mag =  np.expand_dims(rays[:, 2], 1)
             s = CAMERA_MATRIX.dot((rays / mag).T)[:2, :]
             paths_rays.append(np.expand_dims(np.all(((s > 0) & (s < CAMERA_HEIGHT)), axis=0), axis=0))
 
-        st = time.time()
         paths_rays = np.concatenate(paths_rays, axis=0).astype(np.uint8)
-
         return np.min(np.sum(paths_rays, axis=0))>0
                     
 
