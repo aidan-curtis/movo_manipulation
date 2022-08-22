@@ -18,7 +18,7 @@ MOVO_PATH = os.path.abspath(MOVO_URDF)
 
 DEFAULT_JOINTS = {
         "pan_joint": -0.07204942405223846,
-        "tilt_joint": -0.599216890335083,
+        "tilt_joint": -0.799216890335083,
         "left_shoulder_pan_joint": -1.193271404355226,
         "left_shoulder_lift_joint": 1.691065746887311,
         "left_arm_half_joint": -2.9308729618144724,
