@@ -301,20 +301,20 @@ class Environment(ABC):
         icp_r = R.from_quat(ip[1]).as_matrix()
         return icp_r, np.array(ip[0]) 
 
-    def in_view_cone(self, points, path):
-        if(len(points)==0):
+    def in_view_cone(self, points, path, attachment=None):
+        if len(points) == 0:
             return True
 
         paths_rays = []
         for q in path:
             icp_r, icp_p = self.get_icp(q)
             rays = icp_r.dot(points.T).T+icp_p
-            mag =  np.expand_dims(rays[:, 2], 1)
+            mag = np.expand_dims(rays[:, 2], 1)
             s = CAMERA_MATRIX.dot((rays / mag).T)[:2, :]
             paths_rays.append(np.expand_dims(np.all(((s > 0) & (s < CAMERA_HEIGHT)), axis=0), axis=0))
 
         paths_rays = np.concatenate(paths_rays, axis=0).astype(np.uint8)
-        return np.min(np.sum(paths_rays, axis=0))>0
+        return np.min(np.sum(paths_rays, axis=0)) > 0
                     
 
 
@@ -706,7 +706,7 @@ class Environment(ABC):
         """
 
         visibility_points = None
-        vis_points = np.array(self.static_vis_grid.occupied_points)
+        vis_points = np.array(self.visibility_grid.occupied_points)
 
         for q in path:
             aabb = self.aabb_from_q(q)
@@ -752,30 +752,32 @@ class Environment(ABC):
             # Check for obstruction with the obstacles grid.
             aabb = self.aabb_from_q(q)
             vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1 )
-            vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
-                                       (occ_points_from_obs <= aabb.upper), axis=1 )
+
 
             if(occupancy_points is None):
                 occupancy_points = occ_points[vis_idx]
-                occupancy_points = np.concatenate([occupancy_points,
-                                                   occ_points_from_obs[vis_idx_from_obs]], axis=0)
+
             else:
                 occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]] , axis=0)
+
+            if len(obstruction) > 0:
+                vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
+                                           (occ_points_from_obs <= aabb.upper), axis=1 )
                 occupancy_points = np.concatenate([occupancy_points,
                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
                 aabb = self.aabb_from_q(q)
                 vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
-                vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
-                                          (occ_points_from_obs <= aabb.upper), axis=1)
 
                 if (occupancy_points is None):
                     occupancy_points = occ_points[vis_idx]
-                    occupancy_points = np.concatenate([occupancy_points,
-                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
                 else:
                     occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+
+                if len(obstruction) > 0:
+                    vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
+                                              (occ_points_from_obs <= aabb.upper), axis=1)
                     occupancy_points = np.concatenate([occupancy_points,
                                                        occ_points_from_obs[vis_idx_from_obs]], axis=0)
 

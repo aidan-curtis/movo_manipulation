@@ -3,7 +3,7 @@ from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pos
                                                     Point, draw_aabb, set_joint_positions, joint_from_name,
                                                     get_link_pose, link_from_name, get_camera_matrix, draw_pose,
                                                     multiply, tform_point, invert, pixel_from_point, get_aabb_volume,
-                                                    get_aabb_vertices, aabb_overlap, RED, BLACK)
+                                                    get_aabb_vertices, aabb_overlap, RED, BLACK, draw_point)
 import numpy as np
 import time
 import datetime
@@ -659,7 +659,7 @@ class Nameless(Planner):
 
             # Only sorting from heuristic. Faster but change if needed
             if USE_COST:
-                paths = sorted(paths, key=lambda x: x[-1], reverse=True)
+                paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
             else:
                 paths = sorted(paths, key=lambda x: x[-1], reverse=True)
 
@@ -682,12 +682,12 @@ class Nameless(Planner):
         gained_vision = set()
         for qi, q in enumerate(path):
             # Check whether the next step goes into area that is unseen.
-            # next_occupied = self.env.visibility_points_from_path([q], attachment=attachment)
-            # for voxel in next_occupied:
-            #     if self.env.visibility_grid.contains(voxel):
-            #         qi = qi-1 if qi-1 >= 0 else 0
-            #         print("Stepping into unseen area. Aborting")
-            #         return path[qi], False, gained_vision, None
+            next_occupied = self.env.visibility_voxels_from_path([q], attachment=attachment)
+            for voxel in next_occupied:
+                if self.env.visibility_grid.contains(voxel):
+                    qi = qi-1 if qi-1 >= 0 else 0
+                    print("Stepping into unseen area. Aborting")
+                    return path[qi], False, gained_vision, None
 
             self.env.move_robot(q, self.joints, attachment=attachment)
 
