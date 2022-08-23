@@ -678,8 +678,8 @@ class Environment(ABC):
         """
 
         voxels = set()
-        vis_points = np.array(self.visibility_grid.occupied_points)
-        vis_voxels = np.array(self.visibility_grid.occupied_voxel_points)
+        vis_points = np.array(self.static_vis_grid.occupied_points)
+        vis_voxels = np.array(self.static_vis_grid.occupied_voxel_points)
 
         for q in path:
             aabb = self.aabb_from_q(q)
@@ -687,22 +687,26 @@ class Environment(ABC):
             voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
             # voxel = [x for x in self.env.static_vis_grid.voxels_from_aabb()
             #             if self.env.static_vis_grid.contains(x)]
+            if attachment is not None:
+                obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+                vis_idx = np.all((obj_aabb.lower <= vis_points) & (vis_points <= obj_aabb.upper), axis=1)
+                voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
         return voxels
         
     def visibility_points_from_path(self, path, attachment=None):
         """
-        Finds the set of voxels that correspond to the swept volume traversed by a path in the
+        Finds the set of points that correspond to the swept volume traversed by a path in the
         visibility space.
 
         Args:
             path (list): The path traversed.
             attachment (list): A list of an attached object's oobb and its attachment grasp.
         Returns:
-            set: A set of voxels occupied by the path.
+            set: A set of points occupied by the path.
         """
 
         visibility_points = None
-        vis_points = np.array(self.visibility_grid.occupied_points)
+        vis_points = np.array(self.static_vis_grid.occupied_points)
 
         for q in path:
             aabb = self.aabb_from_q(q)
@@ -712,6 +716,15 @@ class Environment(ABC):
                 visibility_points = vis_points[vis_idx]
             else:
                 visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]] , axis=0)
+
+            if attachment is not None:
+                aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+                vis_idx = np.all((aabb.lower <= vis_points) & (vis_points <= aabb.upper), axis=1)
+
+                if (visibility_points is None):
+                    visibility_points = vis_points[vis_idx]
+                else:
+                    visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]], axis=0)
 
         return visibility_points
 
@@ -730,18 +743,41 @@ class Environment(ABC):
             A set of voxels occupied by the path and the first movable object the path collides with.
         """
         occ_points = np.array(self.occupancy_grid.occupied_points)
+        occ_points_from_obs = np.array([list(self.occupancy_grid.center_from_voxel(vox))
+                                        for vox in obstruction])
         occupancy_points = None
         movable_coll = None
         
         for q in path:
             # Check for obstruction with the obstacles grid.
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower<=occ_points) & (occ_points<=aabb.upper), axis=1 )
+            vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1 )
+            vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
+                                       (occ_points_from_obs <= aabb.upper), axis=1 )
 
             if(occupancy_points is None):
                 occupancy_points = occ_points[vis_idx]
+                occupancy_points = np.concatenate([occupancy_points,
+                                                   occ_points_from_obs[vis_idx_from_obs]], axis=0)
             else:
                 occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]] , axis=0)
+                occupancy_points = np.concatenate([occupancy_points,
+                                                   occ_points_from_obs[vis_idx_from_obs]], axis=0)
+
+            if attachment is not None:
+                aabb = self.aabb_from_q(q)
+                vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
+                vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
+                                          (occ_points_from_obs <= aabb.upper), axis=1)
+
+                if (occupancy_points is None):
+                    occupancy_points = occ_points[vis_idx]
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                else:
+                    occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:

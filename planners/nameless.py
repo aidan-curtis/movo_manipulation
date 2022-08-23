@@ -66,6 +66,7 @@ class Nameless(Planner):
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data, q_start)
         self.env.update_occupancy(q_start, image_data)
+        self.env.update_movable_boxes(image_data)
         self.env.plot_grids(True, True, True)
 
         self.complete = False
@@ -97,10 +98,10 @@ class Nameless(Planner):
             self.v_0.update(gained_vision)
 
             # Ask for whether the user wants to save the current state to load it in the future.
-            # print("Want to save this state? Press Y or N then Enter")
-            # x = input()
-            # if x == "Y" or x == "y":
-            self.save_state()
+            print("Want to save this state? Press Y or N then Enter")
+            x = input()
+            if x == "Y" or x == "y":
+                self.save_state()
 
         print("Reached the goal")
         wait_if_gui()
@@ -558,8 +559,17 @@ class Nameless(Planner):
                                                                           ignore_movable=ignore_movable,
                                                                           attachment=attachment)
                 if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
-                    s_q = self.env.visibility_points_from_path([q, q_prime])
-                    if self.env.in_view_cone(s_q, path):
+                    #s_q = self.env.visibility_points_from_path([q, q_prime], attachment=attachment)
+                    #if self.env.in_view_cone(s_q, path):
+                    #    actions.append((q_prime, distance(q, q_prime)))
+                    if len(path) == 1:
+                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+                    else:
+                        v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G,
+                                                                                           attachment=attachment))
+                    self.vision_q[q] = v_q
+                    s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
+                    if s_q.issubset(v_q):
                         actions.append((q_prime, distance(q, q_prime)))
 
         return actions
