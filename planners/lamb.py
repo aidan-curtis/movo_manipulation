@@ -3,7 +3,8 @@ from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pos
                                                     Point, draw_aabb, set_joint_positions, joint_from_name,
                                                     get_link_pose, link_from_name, get_camera_matrix, draw_pose,
                                                     multiply, tform_point, invert, pixel_from_point, get_aabb_volume,
-                                                    get_aabb_vertices, aabb_overlap, RED, BLACK, draw_point)
+                                                    get_aabb_vertices, aabb_overlap, RED, BLACK, draw_point,
+                                                    get_aabb, Euler, get_aabb_center)
 import numpy as np
 import time
 import datetime
@@ -17,10 +18,10 @@ from environments.vamp_environment import GRID_RESOLUTION, find_min_angle
 USE_COST = False
 
 
-class Nameless(Planner):
+class Lamb(Planner):
     def __init__(self, env):
         # Sets up the environment and necessary data structures for the planner
-        super(Nameless, self).__init__()
+        super(Lamb, self).__init__()
 
         self.env = env
         self.env.setup()
@@ -47,7 +48,7 @@ class Nameless(Planner):
         self.vision_q = dict()
 
 
-    def get_plan(self, loadfile=None):
+    def get_plan(self, loadfile=None, debug=False):
         """
         Creates a plan and executes it based on the given planner and environment.
 
@@ -56,6 +57,7 @@ class Nameless(Planner):
         Returns:
             list: The plan followed by the robot from start to goal.
         """
+        self.debug = debug
         q_start, q_goal = self.env.start, self.env.goal
         # Gets initial vision and updates the current vision based on it
         self.v_0 = self.get_circular_vision(q_start)
@@ -88,7 +90,7 @@ class Nameless(Planner):
             # If at any point there is no possible path, then the search is ended.
             if path is None:
                 print("Can't find path")
-                break
+                return
             print("Found path:")
             print(path)
 
@@ -98,15 +100,16 @@ class Nameless(Planner):
             self.v_0.update(gained_vision)
 
             # Ask for whether the user wants to save the current state to load it in the future.
-            print("Want to save this state? Press Y or N then Enter")
-            x = input()
-            if x == "Y" or x == "y":
-                self.save_state()
+            if self.debug:
+                print("Want to save this state? Press Y or N then Enter")
+                x = input()
+                if x == "Y" or x == "y":
+                    self.save_state()
 
         print("Reached the goal")
         wait_if_gui()
 
-    def vamp_attach(self, q_start, q_goal, v_0):
+    def vamp_attach(self, q_start, q_goal, v_0, obstructions=set(), ignore_obstacles=[]):
         """
         Path planning using vamp for clearing an object out of the way.
 
@@ -127,10 +130,13 @@ class Nameless(Planner):
             p = []
             v = v_0
 
-            p_obj = self.vamp_path_vis(self.current_q, q_goal, v, relaxed=True, ignore_movable=True)
+            p_obj = self.vamp_path_vis(self.current_q, q_goal, v, relaxed=True, ignore_movable=True,
+                                       obstructions=obstructions)
+            if p_obj is None:
+                return False, None
             obj_obstruction = self.env.find_path_movable_obstruction(p_obj)
             # Sample attachment poses
-            attachment_poses = self.env.sample_attachment_poses(obj_obstruction, self.G)
+            attachment_poses = self.env.sample_attachment_poses(obj_obstruction, self.G, obstructions=obstructions)
 
             executed = False
             for pose in attachment_poses:
@@ -139,22 +145,24 @@ class Nameless(Planner):
                     # Update vision since we might have moved in the process.
                     v.update(v_0)
                     # Get a direct path to the attachment
-                    p_att = self.vamp_path_vis(self.current_q, pose, v)
+                    p_att = self.vamp_path_vis(self.current_q, pose, v, obstructions=obstructions)
                     if p_att is not None:
                         # If the path was found, executed until complete or a new obstacle was detected
                         p += p_att
-                        self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p)
+                        self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p,
+                                                                                    ignore_obstacles=ignore_obstacles)
                         self.v_0.update(gained_vision)
                         executed = True
                         break
                     # If no direct path exists find a relaxed one.
-                    p_att_rel = self.vamp_path_vis(self.current_q, pose, v, relaxed=True)
+                    p_att_rel = self.vamp_path_vis(self.current_q, pose, v, relaxed=True, obstructions=obstructions)
                     if p_att_rel is None:
                         # If no relaxed path exists either, can continue to the next attachment pose
                         path_exists = False
                         continue
                     # View the required region if a relaxed path exists.
-                    p_vis = self.vavp(self.current_q, self.env.visibility_voxels_from_path(p_att_rel).difference(v), v)
+                    p_vis = self.vavp(self.current_q, self.env.visibility_voxels_from_path(p_att_rel).difference(v), v,
+                                      obstructions=obstructions)
                     if p_vis is not None:
                         # Make this path a required action and try again on the same attachment pose.
                         p += p_vis
@@ -172,24 +180,26 @@ class Nameless(Planner):
             # the environment and retry.
             if not executed and not complete:
                 W = set(self.env.static_vis_grid.value_from_voxel.keys())
-                p_vis = self.tourist(self.current_q, W.difference(v), v)
+                p_vis = self.tourist(self.current_q, W.difference(v), v, obstructions=obstructions)
                 if p_vis is None:
                     print("Can't do anything aborting")
-                    return None, None
+                    return False, None
 
-                self.current_q, _, gained_vision, self.collided_object = self.execute_path(p_vis)
+                self.current_q, _, gained_vision, self.collided_object = self.execute_path(p_vis,
+                                                                            ignore_obstacles=ignore_obstacles)
                 self.v_0.update(gained_vision)
 
         print("Attached successfully")
         # Ask for whether the user wants to save the current state to load it in the future.
-        print("Want to save this state? Press Y or N then Enter")
-        x = input()
-        if x == "Y" or x == "y":
-            self.save_state()
+        if self.debug:
+            print("Want to save this state? Press Y or N then Enter")
+            x = input()
+            if x == "Y" or x == "y":
+                self.save_state()
 
         return True, p_obj
 
-    def vamp_place(self, q_start, p_through, v_0):
+    def vamp_place(self, q_start, p_through, v_0, obstructions=set(), ignore_obstacles=[], wrong_placements=set()):
         """
         Path planning using vamp for clearing an object out of the way.
 
@@ -202,28 +212,59 @@ class Nameless(Planner):
         Returns:
             Whether we were able to move the object successfully.
         """
-        p = []
-        v = v_0
         q = q_start
         grasp = None
         coll_obj = self.env.find_path_movable_obstruction(p_through)
 
+        # Get the original grasp
+        base_pose = Pose(
+            point=Point(x=q[0], y=q[1]),
+            euler=Euler(yaw=q[2]),
+        )
+        obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
+        base_grasp = multiply(invert(base_pose), obj_pose)
+
         print("Ready to plan placement")
         self.env.remove_movable_object(coll_obj)
+        max_iters = 5
+        niters = 0
         executed = False
         while not executed:
-            q_place, grasp, obj = self.env.sample_placement(q, coll_obj, self.G, p_through)
+            p = []
+            v = self.v_0
+            if niters == max_iters:
+                print("Reached maximum number of iterations for placement. Aborting")
+                self.env.movable_boxes.append(self.env.movable_object_oobb_from_q(coll_obj, q, base_grasp))
+                return False
+            niters += 1
+            print("Looking for placement position")
+            p_through_voxels = self.env.visibility_voxels_from_path(p_through)
+            q_place, grasp, obj = self.env.sample_placement(q, coll_obj, self.G, p_through_voxels.union(wrong_placements), obstructions=obstructions)
+            if q_place is None:
+                print("No valid placement found. Aborting")
+                self.env.movable_boxes.append(self.env.movable_object_oobb_from_q(coll_obj, q, base_grasp))
+                return False
             self.env.movable_object_oobb_from_q(coll_obj, q_place, grasp, visualize=True)
             # Look for a path to move the object
             path_exists = True
             while path_exists:
                 # Update vision since we might have moved in the process.
                 v.update(v_0)
-                p_att = self.vamp_path_vis(q, q_place, v, attachment=[coll_obj, grasp, obj])
+                p_att = self.vamp_path_vis(q, q_place, v, attachment=[coll_obj, grasp, obj], obstructions=obstructions)
                 if p_att is not None:
+                    # First check that we can come back to our original position from the placement.
+                    # To avoid blocking our own exit
+                    # object_aabb_end = self.env.movable_object_oobb_from_q(coll_obj, q_place, grasp).aabb
+                    # voxels_aabb_end = self.env.static_vis_grid.voxels_from_aabb(object_aabb_end)
+                    # if len(self.env.visibility_voxels_from_path(p_att).intersection(voxels_aabb_end)) != 0:
+                    #     print("This placement will cause a deadlock. Replanning")
+                    #     break
+
                     # If the path was found, executed until complete or a new obstacle was detected
                     p += p_att
-                    self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p, attachment=[coll_obj, grasp, obj])
+                    self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p,
+                                                                                    attachment=[coll_obj, grasp, obj],
+                                                                                    ignore_obstacles=ignore_obstacles)
                     self.v_0.update(gained_vision)
 
                     # We executed so update variables
@@ -243,36 +284,64 @@ class Nameless(Planner):
 
                 # If it can't find direct path, find a relaxed one.
                 p_att_rel = self.vamp_path_vis(q, q_place, v, relaxed=True,
-                                               attachment=[coll_obj, grasp, obj])
+                                               attachment=[coll_obj, grasp, obj],
+                                               obstructions=obstructions)
                 if p_att_rel is None:
                     # If no relaxed path exists either, can continue to the next attachment pose
                     path_exists = False
                     continue
                 # View the required region if a relaxed path exists while restricting the path
                 # through the object we want to move.
-                obstructions = self.env.visibility_voxels_from_path(p_att_rel).difference(v)
-                obstructions.update(self.env.occupancy_grid.voxels_from_aabb(coll_obj.aabb))
-                p_vis = self.vavp(q, obstructions, v)
+                required_region = self.env.visibility_voxels_from_path(p_att_rel).difference(v)
+                new_obs = obstructions.union(self.env.occupancy_grid.voxels_from_aabb(coll_obj.aabb))
+                # Sample a goal
+                q_goal = None
+                while q_goal is None:
+                    q_goal = self.sample_goal_from_required(required_region, obstructions=new_obs)
+                p_vis = self.vamp_backchain(q, q_goal, self.v_0, obstructions=new_obs,
+                                            ignore_obstacles=ignore_obstacles+[obj],
+                                            wrong_placements=wrong_placements.union(self.env.visibility_voxels_from_path(p_att_rel, attachment=[coll_obj, grasp, obj])))
+                # If the path executed then we have to go back to where we were and execute again
+                while self.current_q != q:
+                    print("Coming back to our original attachment")
+                    p_vis = None
+                    p_att = self.vamp_backchain(self.current_q, q, self.v_0,
+                                               obstructions=new_obs, ignore_obstacles=ignore_obstacles+[obj],
+                                                wrong_placements=wrong_placements.union(self.env.visibility_voxels_from_path(p_att_rel, attachment=[coll_obj, grasp, obj])))
+                    self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p_att,
+                                                                                ignore_obstacles=ignore_obstacles+[obj])
+                    self.v_0.update(gained_vision)
+                    p = []
+                    v = self.v_0
+                    self.env.clear_noise_from_attached(q, [coll_obj, grasp, obj])
                 if p_vis is not None:
                     # Make this path a required action and try again on the same attachment pose.
-                    p += p_vis
-                    v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
-                    self.current_q = p_vis[-1]
+                    p += p_vis + list(reversed(p_vis))
+
+                    self.current_q, complete, gained_vision, self.collided_object = self.execute_path(p,
+                                                                                                      ignore_obstacles=ignore_obstacles + [obj])
+                    self.v_0.update(gained_vision)
+                    p = []
+                    v = self.v_0
+                    self.env.clear_noise_from_attached(q, [coll_obj, grasp, obj])
+                    continue
                 path_exists = False
 
-        # Place the object in the environment.
-        self.env.movable_boxes.append(self.env.movable_object_oobb_from_q(coll_obj, self.current_q, grasp))
+        # Place the object in the environment if it was moved correctly.
+        self.env.movable_boxes.append(self.env.movable_object_oobb_from_q(coll_obj, q, grasp))
         print("Finished moving the object. Replanning")
         # Ask for whether the user wants to save the current state to load it in the future.
-        print("Want to save this state? Press Y or N then Enter")
-        x = input()
-        if x == "Y" or x == "y":
-            self.save_state()
+        if self.debug:
+            print("Want to save this state? Press Y or N then Enter")
+            x = input()
+            if x == "Y" or x == "y":
+                self.save_state()
 
         return True
 
 
-    def vamp_backchain(self, q_start, q_goal, v_0):
+    def vamp_backchain(self, q_start, q_goal, v_0, obstructions=set(), ignore_obstacles=[],
+                       wrong_placements=set()):
         """
         Main function for path planning using VAMP.
 
@@ -288,41 +357,48 @@ class Nameless(Planner):
         v = v_0
         q = q_start
 
-        #success, p_through = self.vamp_attach(q_start, q_goal, v)
-        #self.vamp_place(self.current_q, p_through, v)
-        #p_final = self.vamp_path_vis(self.current_q, q_goal, v)
-
         while True:
             # Update vision since we might have moved in the process.
             v.update(v_0)
             # Find a path to goal, keeping the visualization constraint and return it if found
-            p_final = self.vamp_path_vis(q, q_goal, v)
+            p_final = self.vamp_path_vis(q, q_goal, v, obstructions=obstructions)
             if p_final is not None:
                 return p + p_final
             print("Couldn't find a direct path. Looking for a relaxed one")
 
             # If a path to goal can't be found, find a relaxed path and use it as a subgoal
-            p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
+            p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True, obstructions=obstructions)
             if p_relaxed is None:
                 print("Can't find any path. Looking through movable obstacles")
-                attached_success, p_through = self.vamp_attach(q, q_goal, v)
-                # If it can't find an attachment then no valid attachment exists. Break!
-                if not attached_success:
-                    return None
-                q = self.current_q
-                placed_success = self.vamp_place(q, p_through, v)
-                q = self.current_q
-                # TODO:Currently it never fails because we have infinite sampling. Change later.
-                if not placed_success:
-                    return None
+                placed_success = False
+                max_iters = 5
+                niters = 0
+                while not placed_success:
+                    # If we can't find any valid movement of the object then abort
+                    # TODO: We can change this such that it marks that objects as invalid and finds another
+                    #  path through a different movable
+                    if niters == max_iters:
+                        return None
+                    niters += 1
+                    attached_success, p_through = self.vamp_attach(q, q_goal, v,
+                                                                   obstructions=obstructions,
+                                                                   ignore_obstacles=ignore_obstacles)
+                    # If it can't find an attachment then no valid attachment exists. Break!
+                    if not attached_success:
+                        return None
+                    q = self.current_q
+                    placed_success = self.vamp_place(q, p_through, v, obstructions=obstructions,
+                                                     ignore_obstacles=ignore_obstacles, wrong_placements=wrong_placements)
+                    q = self.current_q
                 continue
 
-            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v)
+            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v,
+                              obstructions=obstructions)
             # If the relaxed version fails, explore some environment. And restart the search
             if p_vis is None:
                 print("P_VIS failed. Observing some of the environment")
                 W = set(self.env.static_vis_grid.value_from_voxel.keys())
-                p_vis = self.tourist(q, W.difference(v), v)
+                p_vis = self.tourist(q, W.difference(v), v, obstructions=obstructions)
             if p_vis is None:
                 print("P_VIS failed again. Aborting")
                 return None
@@ -358,6 +434,34 @@ class Nameless(Planner):
                 return p_vis
         return None
 
+    def sample_goal_from_required(self, R, ignore_movable=False, obstructions=set()):
+        """
+        Samples a goal position that views most of the required region
+
+        Args:
+            R (set) : Set of voxels that define the area we are interested in gaining vision from.
+            obstructions (set): Set of tuples that define the space that the robot can't occupy.
+            ignore_movable (bool): Whether to ignore collisions with movable objects or not.
+        Returns:
+            A configuration where the robot sees most of the space, from a set of random configurations.
+        """
+        q_goal = None
+        score = 0
+        number_of_samples = 1000
+        # Sample a goal position that views most of the space of interest.
+        for i in range(number_of_samples):
+            q_rand = self.G.rand_vex(self.env)
+            # Check collisions with obstacle and movable objects if required
+            collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
+            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
+                new_score = len(self.env.get_optimistic_vision(q_rand, self.G, obstructions=obstructions).intersection(R))
+                if new_score != 0:
+                    if new_score > score:
+                        q_goal = q_rand
+                        score = new_score
+        return q_goal
+
+
     def tourist(self, q_start, R, v_0, relaxed=False, obstructions=set(), ignore_movable=False):
         """
         Procedure used to find a path that partially or completely views some area of interest.
@@ -372,20 +476,8 @@ class Nameless(Planner):
         Returns:
             list: The suggested path that views some area of interest.
         """
-        q_goal = None
-        score = 0
-        number_of_samples = 1000
-        # Sample a goal position that views most of the space of interest.
-        for i in range(number_of_samples):
-            q_rand = self.G.rand_vex()
-            # Check collisions with obstacle and movable objects if required
-            collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
-            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
-                new_score = len(self.env.get_optimistic_vision(q_rand, self.G).intersection(R))
-                if new_score != 0:
-                    if new_score > score:
-                        q_goal = q_rand
-                        score = new_score
+        q_goal = self.sample_goal_from_required(R, ignore_movable=ignore_movable,
+                                                obstructions=obstructions)
 
         # Defines a heuristic function to use on the A* star search. Currently using the distance to goal.
         def heuristic_fn(q):
@@ -532,6 +624,14 @@ class Nameless(Planner):
             # If the node has already been extended do not consider it.
             if q_prime in extended:
                 continue
+            # Check if there is an attached object that can only be pushed and prune actions
+            # to depict this.
+            if attachment is not None:
+                if attachment[2] in self.env.push_only:
+                    angle = round(np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0]), 3)
+                    if angle != q[2] or q_prime[2] != q[2]:
+                        continue
+
             if relaxed:
                 # Check for whether the new node is in obstruction with any obstacle.
                 collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions,
@@ -646,8 +746,9 @@ class Nameless(Planner):
             # If goal is found return it, graph the search, and output the elapsed time.
             if best_path[-1] == q_goal:
                 done = time.clock_gettime_ns(0) - current_t
-                print(done * (10 ** (-9)))
-                self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
+                if self.debug:
+                    print(done * (10 ** (-9)))
+                    self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
                 return best_path
 
             extended.add(best_path[-1])
@@ -664,11 +765,12 @@ class Nameless(Planner):
                 paths = sorted(paths, key=lambda x: x[-1], reverse=True)
 
         done = time.clock_gettime_ns(0) - current_t
-        print(done * (10 ** (-9)))
-        self.G.plot_search(self.env, extended, goal=q_goal)
+        if self.debug:
+            print(done * (10 ** (-9)))
+            self.G.plot_search(self.env, extended, goal=q_goal)
         return None
 
-    def execute_path(self, path, attachment=None):
+    def execute_path(self, path, attachment=None, ignore_obstacles=[]):
         """
         Executes a given path in simulation until it is complete or no longer feasible.
 
@@ -693,11 +795,12 @@ class Nameless(Planner):
 
             # Get updated occupancy grid at each step
             camera_pose, image_data = self.env.get_robot_vision()
-            self.env.update_occupancy(q, image_data)
-            gained_vision.update(self.env.update_movable_boxes(image_data))
+            self.env.update_occupancy(q, image_data, ignore_obstacles=ignore_obstacles)
+            gained_vision.update(self.env.update_movable_boxes(image_data, ignore_obstacles=ignore_obstacles))
             gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
 
             # If an object is attached, do not detect it as an obstacle or a new movable object
+            # TODO: Find a better method to clear the noise than the current one
             if attachment is not None:
                 self.env.clear_noise_from_attached(q, attachment)
 

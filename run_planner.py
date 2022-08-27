@@ -3,7 +3,7 @@ from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
 from planners.vamp import Vamp
-from planners.nameless import Nameless
+from planners.lamb import Lamb
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
@@ -20,7 +20,7 @@ PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
             "rrt": RRT,
             "vamp": Vamp,
-            "nameless": Nameless,
+            "lamb": Lamb,
             "do_nothing": DoNothing}
 
 ENVIRONMENTS = {"empty": Empty,
@@ -66,6 +66,14 @@ def get_args():
         help="Data file indicating saved state"
     )
 
+    parser.add_argument(
+        "-d",
+        "--debug",
+        type=bool,
+        default=False,
+        help="Whether to enter in debugging mode"
+    )
+
 
     args = parser.parse_args()
     return args
@@ -83,7 +91,7 @@ if __name__=="__main__":
     env = ENVIRONMENTS[args.env]()
 
     planner = PLANNERS[args.algo](env)
-    plan = planner.get_plan(loadfile=args.load)
+    plan = planner.get_plan(loadfile=args.load, debug=args.debug)
     statistics = env.validate_plan(plan)
 
     #write_results(args, statistics)

@@ -11,7 +11,8 @@ from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet,
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb,
                                                     aabb_from_points, OOBB, ray_from_pixel,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
-                                                    tform_points, get_pose, draw_aabb, wait_if_gui)
+                                                    tform_points, get_pose, draw_aabb, wait_if_gui, aabb_intersection,
+                                                    get_aabb_volume)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -320,7 +321,7 @@ class Environment(ABC):
 
 
 
-    def get_optimistic_vision(self, q, G, attachment=None):
+    def get_optimistic_vision(self, q, G, attachment=None, obstructions=set()):
         """
         Gets the optimistic vision of a specified configuration. Optimistic vision is defined as
         the vision cone from a certain configuration, unless the configuration has already been
@@ -351,9 +352,14 @@ class Environment(ABC):
 
         # If an object is attached, compute set of voxels that could occlude vision.
         extra_obs = set()
+        extra_obs.update(obstructions)
         if attachment is not None:
             obj_oobb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
-            extra_obs = set([x for x in self.occupancy_grid.voxels_from_aabb(obj_oobb.aabb)])
+            extra_obs.update(set([x for x in self.occupancy_grid.voxels_from_aabb(obj_oobb.aabb)]))
+
+        # Get the occlusion given by the movable objects
+        for obj in self.movable_boxes:
+            extra_obs.update(set([x for x in self.occupancy_grid.voxels_from_aabb(obj.aabb)]))
 
 
         # Only filter those voxels that are not obstructed by an occupied voxel
@@ -472,12 +478,68 @@ class Environment(ABC):
         Returns:
             The first movable object the path collides with.
         """
+        best_obj = None
+        best_volume = 0
         for q in path:
             aabb = self.aabb_from_q(q)
             for movable_box in self.movable_boxes:
-                if aabb_overlap(movable_box.aabb, aabb):
-                    return movable_box
-    def sample_attachment_poses(self, movable_object, G, radius=1):
+                intersec = aabb_intersection(aabb, movable_box.aabb)
+                if intersec is not None:
+                    volume = get_aabb_volume(intersec)
+                    if volume > best_volume:
+                        best_volume = volume
+                        best_obj = movable_box
+        return best_obj
+    def sample_attachment_push(self, obj, G, obstructions=set()):
+        """
+        Helper function to sample an attachment position for the case that the object can
+        only be pushed.
+
+        Args:
+            obj (int): The object index in the environment
+            G: The discrete graph of the environment.
+        Returns:
+            A set of poses that are valid attachments
+        """
+        aabb = get_aabb(obj)
+        mid_point = (np.array(aabb.lower) + np.array(aabb.upper)) / 2
+
+        attachments = [[round(mid_point[0], 1), aabb.lower[1], round(np.pi / 2, 3)],
+                       [round(mid_point[0], 1), aabb.upper[1], round(3 * np.pi / 2, 3)],
+                       [aabb.lower[0], round(mid_point[1], 1), 0],
+                       [aabb.upper[0], round(mid_point[1], 1), round(np.pi, 3)]]
+
+        # Fit the attachments to the grid
+        for i in range(len(attachments)):
+            robot_aabb = self.oobb_from_q(attachments[i]).aabb
+            if i == 0:
+                attachments[i][1] = attachments[i][1] - (robot_aabb[1][0] + G.res[1]) + G.res[1]/2
+                attachments[i][1] = round(attachments[i][1] - (attachments[i][1] % G.res[1]), 1)
+            elif i == 1:
+                attachments[i][1] = attachments[i][1] + (robot_aabb[1][0] + G.res[1]) + G.res[1]/2
+                attachments[i][1] = round(attachments[i][1] - (attachments[i][1] % G.res[1]), 1)
+            elif i == 2:
+                attachments[i][0] = attachments[i][0] - (robot_aabb[1][0] + G.res[0]) + G.res[0]/2
+                attachments[i][0] = round(attachments[i][0] - (attachments[i][0] % G.res[0]), 1)
+            else:
+                attachments[i][0] = attachments[i][0] + (robot_aabb[1][0] + G.res[0]) + G.res[0]/2
+                attachments[i][0] = round(attachments[i][0] - (attachments[i][0] % G.res[0]), 1)
+            if i < 2:
+                attachments[i][0] = attachments[i][0] + G.res[0] / 2
+                attachments[i][0] = round(attachments[i][0] - (attachments[i][0] % G.res[0]), 1)
+            else:
+                attachments[i][1] = attachments[i][1] + G.res[1] / 2
+                attachments[i][1] = round(attachments[i][1] - (attachments[i][1] % G.res[1]), 1)
+
+        positions = set()
+        for pos in attachments:
+            obst, coll = self.obstruction_from_path([tuple(pos)], obstructions)
+            if len(obst) == 0 and coll is None:
+                positions.add(tuple(pos))
+        return positions
+
+
+    def sample_attachment_poses(self, movable_object, G, radius=1, obstructions=set()):
         """
         Given an object to move, sample valid poses around it for a successful attachment
 
@@ -488,6 +550,16 @@ class Environment(ABC):
         Returns:
             A set of poses that are valid attachments
         """
+        # Check whether the object is push only, and handle it accordingly.
+        obj = None
+        for obj in self.objects:
+            if aabb_contains_point(get_aabb_center(movable_object.aabb), get_aabb(obj)):
+                break
+
+        if obj in self.push_only:
+            return self.sample_attachment_push(obj, G, obstructions=obstructions)
+
+        # If the object can be moved freely, then sample attachments
         mid_point = ((movable_object.aabb[0][0] + movable_object.aabb[1][0]) / 2,
                      (movable_object.aabb[0][1] + movable_object.aabb[1][1]) / 2)
         mid_node = (mid_point[0] + G.res[0] / 2, mid_point[1] + G.res[1] / 2)
@@ -508,8 +580,9 @@ class Environment(ABC):
                     if q in candidates:
                         continue
                     queue.append(q)
-                    if aabb_overlap(movable_object.aabb, self.aabb_from_q(q)) or\
-                            len(self.obstruction_from_path([q], set())[0]) != 0:
+                    obst, coll = self.obstruction_from_path([q], obstructions)
+                    if aabb_overlap(scale_aabb(movable_object.aabb, 1.1), self.aabb_from_q(q)) or\
+                            len(obst) != 0 or coll is not None:
                         continue
                     angle = np.arctan2(mid_point[1] - q[1], mid_point[0]-q[0])
                     if abs(find_min_angle(angle, q[2])) < np.pi/18:
@@ -519,7 +592,7 @@ class Environment(ABC):
                         candidates.add(q)
         return candidates
 
-    def sample_placement(self, q_start, coll_obj, G, p_through):
+    def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set()):
         """
         Samples a placement position for an object such that it does not collide with a given path
 
@@ -527,7 +600,7 @@ class Environment(ABC):
             q_start (tuple): Configuration of the robot at the start of attachment.
             coll_obj : The oobb of the attached object.
             G : THe discrete representation of the configuration space.
-            p_through (list): The path we can't collide with.
+            p_through (set): The set of voxels of the path we can't collide with.
         Returns:
             A random configuration that is valid, the grasp transform, as well as the corresponding object.
         """
@@ -536,6 +609,11 @@ class Environment(ABC):
         for obj in self.objects:
             if aabb_contains_point(get_aabb_center(coll_obj.aabb), get_aabb(obj)):
                 break
+        # If the object can only be pushed then restrict its possible placements
+        if obj in self.push_only:
+            return self.sample_push_placement(q_start, coll_obj, G, p_through, obj,
+                                              obstructions=obstructions)
+
         # Compute the grasp transform of the attachment.
         base_pose = Pose(
             point=Point(x=q_start[0], y=q_start[1]),
@@ -546,13 +624,60 @@ class Environment(ABC):
         good = False
         # Look for a random configuration and return it only if it is valid.
         while not good:
-            rand_q = G.rand_vex()
-            obstruction = self.visibility_voxels_from_path(p_through)
+            rand_q = G.rand_vex(self)
             if aabb_overlap(coll_obj.aabb, self.aabb_from_q(rand_q)):
                 continue
-            if len(self.obstruction_from_path([rand_q], obstruction,
-                                              attachment=[coll_obj, base_grasp])[0]) == 0:
+            obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
+                                                    attachment=[coll_obj, base_grasp])
+            if len(obst) == 0 and coll is None:
                 return rand_q, base_grasp, obj
+
+    def sample_push_placement(self, q_start, coll_obj, G, p_through, obj, obstructions=set()):
+        """
+        Helper function for finding a placement position for an object that can only be pushed
+
+        Args:
+            q_start (tuple): Configuration of the robot at the start of attachment.
+            coll_obj : The oobb of the attached object.
+            G : THe discrete representation of the configuration space.
+            p_through (set): The path we can't collide with.
+            obj (int): The representation of the object in the environment.
+        Returns:
+            A random configuration that is valid, the grasp transform, as well as the corresponding object.
+        """
+        room_aabb = self.room.aabb
+        base_pose = Pose(
+            point=Point(x=q_start[0], y=q_start[1]),
+            euler=Euler(yaw=q_start[2]),
+        )
+        obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
+        base_grasp = multiply(invert(base_pose), obj_pose)
+        placements = []
+        if q_start[2] == 0:
+            placements = [(round(x, 1), q_start[1], q_start[2])
+                          for x in np.arange(q_start[0], room_aabb[1][0], G.res[0])]
+        elif q_start[2] == round(np.pi/2, 3):
+            placements = [(q_start[0], round(x, 1), q_start[2])
+                          for x in np.arange(q_start[1], room_aabb[1][1], G.res[1])]
+        elif q_start[2] == round(np.pi, 3):
+            placements = [(round(x, 1), q_start[1], q_start[2])
+                          for x in np.arange(q_start[0], room_aabb[0][0], -G.res[0])]
+        elif q_start[2] == round(3*np.pi/2, 3):
+            placements = [(q_start[0], round(x, 1), q_start[2])
+                          for x in np.arange(q_start[1], room_aabb[0][1], -G.res[1])]
+
+        good = False
+        idxs = np.random.randint(0, len(placements), size=len(placements))
+        for idx in idxs:
+            rand_q = placements[idx]
+            if aabb_overlap(coll_obj.aabb, self.aabb_from_q(rand_q)):
+                continue
+            obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
+                                                    attachment=[coll_obj, base_grasp])
+            if len(obst) == 0 and coll is None:
+                return rand_q, base_grasp, obj
+        return None, None, None
+
 
     def movable_object_oobb_from_q(self, movable_object_oobb, q, grasp, visualize=False):
         """
@@ -606,7 +731,7 @@ class Environment(ABC):
         self.movable_boxes = new_l
 
         # Eliminate occupancy grid voxels where the object is
-        for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(obj_oobb.aabb, 1.01)):
+        for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(obj_oobb.aabb, 1.1)):
             self.occupancy_grid.set_free(voxel)
 
     def move_robot(self, q, joints, attachment=None):
@@ -767,7 +892,7 @@ class Environment(ABC):
                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
-                aabb = self.aabb_from_q(q)
+                aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
                 vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
 
                 if (occupancy_points is None):

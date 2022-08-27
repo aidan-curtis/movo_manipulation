@@ -111,15 +111,25 @@ class Graph:
             if i < (n_vertices - (self.t_step * self.y_step)):
                 self.add_edge(i, i + self.y_step*self.t_step)
 
-    def rand_vex(self):
+    def rand_vex(self, env):
         """
         Selects a random vertex from the graph.
 
+        Args:
+            env (object): The environment where the graph is constructed.
         Returns:
             tuple: a vertex of the graph.
+
         """
-        i = np.random.randint(len(self.vertices))
-        return self.vertices[i]
+        while True:
+            i = np.random.randint(len(self.vertices))
+            # Restrict the random points to be on the floors' bounds to improve sampling in
+            # non-rectangular rooms
+            for floor in env.room.floors:
+                aabb = get_aabb(floor)
+                if (np.all([l1 <= l2 for l1, l2 in zip(aabb.lower[:2], self.vertices[i][:2])]) &
+                    np.all([l2 <= l1 for l1, l2 in zip(aabb.upper[:2], self.vertices[i][:2])])):
+                    return self.vertices[i]
 
 
     def plot(self, env, path=None):
