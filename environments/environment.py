@@ -28,12 +28,14 @@ Room = namedtuple("Room", ["walls", "floors", "aabb", "movable_obstacles"])
 Force = namedtuple("Force", ["magnitude", "angle"])
 
 
-class Environment(ABC):
+class Environment():
 
-    @abstractmethod
-    def setup(self):
+    def __init__(self):
         pass
-
+    
+    def connect(self):
+        p.connect(p.GUI)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
 
     def validate_plan(self, plan):
         """
@@ -240,7 +242,6 @@ class Environment(ABC):
             return True
 
         return False
-
 
     def check_conf_collision(self, q, ignore_movable=False, forced_object_coll=[]):
         aabb = self.centered_aabb

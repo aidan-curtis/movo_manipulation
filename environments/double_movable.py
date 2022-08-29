@@ -30,7 +30,7 @@ class DoubleMovable(Environment):
 
         self.disconnect()
 
-        p.connect(p.GUI)
+        self.connect()
         self.robot = self.setup_robot()
 
         with LockRenderer():

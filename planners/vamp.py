@@ -41,7 +41,7 @@ class Vamp(Planner):
         self.complete = None
         self.current_q = None
 
-    def get_plan(self, loadfile=None):
+    def get_plan(self, loadfile=None, **kwargs):
         """
         Creates a plan and executes it based on the given planner and environment.
 

@@ -17,7 +17,7 @@ class WorkTradeoff(Environment):
 
     def setup(self):
 
-        self.disconnect()
+        self.connect()
         
         p.connect(p.GUI)
 

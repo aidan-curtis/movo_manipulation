@@ -27,7 +27,7 @@ class Empty(Environment):
 
         self.disconnect()
         
-        p.connect(p.GUI)
+        self.connect()
 
         self.robot = self.setup_robot()
 

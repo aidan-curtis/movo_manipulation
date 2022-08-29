@@ -317,7 +317,9 @@ class Environment(ABC):
         paths_rays = np.concatenate(paths_rays, axis=0).astype(np.uint8)
         return np.min(np.sum(paths_rays, axis=0)) > 0
                     
-
+    def connect(self):
+        p.connect(p.GUI)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
 
 
 

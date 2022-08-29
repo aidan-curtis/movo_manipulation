@@ -22,7 +22,7 @@ class AStarSearch(Planner):
                        joint_from_name(self.env.robot, "theta")]
 
 
-    def get_plan(self):
+    def get_plan(self, **kwargs):
 
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data)

@@ -34,8 +34,8 @@ class Complex(Environment):
     def setup(self):
 
         self.disconnect()
+        self.connect()
         
-        p.connect(p.GUI)
         self.robot = self.setup_robot()
 
         with LockRenderer():

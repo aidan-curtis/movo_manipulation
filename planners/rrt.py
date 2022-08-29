@@ -52,7 +52,7 @@ class RRT(Planner):
 
         return final_path
 
-    def get_plan(self):
+    def get_plan(self, **kwargs):
         
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data)
