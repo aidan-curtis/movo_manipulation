@@ -1,5 +1,8 @@
 <?xml version="1.0" ?>
 <robot name="partnet_6f36520144753550f91663a74ccd2338">
+	<material name="Red">
+    	<color rgba="1.0 0.0 0.0 1.0"/>
+  	</material>
 	<link name="base"/>
 	<link name="link_0">
 		<visual name="caster_stem-88">
@@ -307,18 +310,21 @@
 			<geometry>
 				<mesh filename="textured_objs/original-19.obj"/>
 			</geometry>
+			<material name="Red" />
 		</visual>
 		<visual name="back_soft_surface-105">
 			<origin xyz="-0.0069497679964117265 0 -0.118190120704646"/>
 			<geometry>
 				<mesh filename="textured_objs/original-4.obj"/>
 			</geometry>
+			<material name="Red" />
 		</visual>
 		<visual name="armrest_soft_surface-99">
 			<origin xyz="-0.0069497679964117265 0 -0.118190120704646"/>
 			<geometry>
 				<mesh filename="textured_objs/original-26.obj"/>
 			</geometry>
+			<material name="Red" />
 		</visual>
 		<visual name="arm_vertical_bar-100">
 			<origin xyz="-0.0069497679964117265 0 -0.118190120704646"/>

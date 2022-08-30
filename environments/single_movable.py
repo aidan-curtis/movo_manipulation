@@ -1,6 +1,6 @@
-from environments.vamp_environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 
-from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
                                                     set_joint_position, load_model, get_aabb)
 import math
@@ -19,38 +19,20 @@ class SingleMovable(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
 
     def setup(self):
 
         self.disconnect()
-        
-        p.connect(p.GUI)
-        self.robot = self.setup_robot()
+        self.connect()
 
         with LockRenderer():
-
-
-            blocking_box = create_box(2,4.5,1, mass=1, color=BROWN)
-            set_pose(blocking_box,
-                    Pose(point=Point(
-                            x=3,
-                            y=1.25,
-                            z=1/2,
-                        )
-                    )
-                )
-            self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
-
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-                )
-
-            set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            )
+            # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=3,
@@ -66,8 +48,8 @@ class SingleMovable(Environment):
                                                  1]
 
             self.room = self.create_room(movable_obstacles=[blocking_chair])
-            self.objects += [blocking_box, blocking_chair]
-            self.static_objects = [blocking_box]
+            self.objects += [blocking_chair]
+            self.static_objects = []
             self.setup_grids()
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
@@ -78,8 +60,6 @@ class SingleMovable(Environment):
         wall_height = 2
         center = [3, 2]
 
-        hall_width = 2
-        hall_length = 3
         floor1 = self.create_pillar(width=width, length=length, color=TAN)
         floor2 = self.create_pillar(width=4, length=1, color=TAN)
         floor3 = self.create_pillar(width=4, length=1, color=TAN)
@@ -120,7 +100,10 @@ class SingleMovable(Environment):
         set_pose(wall_8,
                  Pose(point=Point(x=4 - (wall_thickness / 2), y=5.5, z=wall_height / 2)))
 
-        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8]
+        wall_9 = self.create_pillar(width=wall_thickness, length=4.5, height=wall_height, color=LIGHT_GREY)
+        set_pose(wall_9, Pose(point=Point(x=3, y=1.25, z=wall_height / 2)))
+
+        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7, wall_8, wall_9]
         floors = [floor1, floor2, floor3]
         aabb = AABB(lower=(center[0] - width / 2.0, center[1] - length / 2.0, 0.05),
                     upper=(center[0] + width / 2.0, center[1] + length / 2.0 + 1, 0 + GRID_HEIGHT))

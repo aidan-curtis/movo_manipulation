@@ -1,6 +1,6 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, set_joint_positions,
-                                                    get_aabb, get_pose)
+from pybullet_planning.pybullet_tools.utils import (LockRenderer, wait_if_gui, joint_from_name, 
+                                                    set_joint_positions, get_aabb)
 import numpy as np
 from collections import deque
 import matplotlib.pyplot as plt
@@ -52,7 +52,7 @@ class RRT(Planner):
 
         return final_path
 
-    def get_plan(self):
+    def get_plan(self, **kwargs):
         
         camera_pose, image_data = self.env.get_robot_vision()
         self.env.update_visibility(camera_pose, image_data)

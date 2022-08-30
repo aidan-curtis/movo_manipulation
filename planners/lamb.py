@@ -1,18 +1,15 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pose, draw_oobb, LockRenderer,
-                                                    Point, draw_aabb, set_joint_positions, joint_from_name,
-                                                    get_link_pose, link_from_name, get_camera_matrix, draw_pose,
-                                                    multiply, tform_point, invert, pixel_from_point, get_aabb_volume,
-                                                    get_aabb_vertices, aabb_overlap, RED, BLACK, draw_point,
-                                                    get_aabb, Euler, get_aabb_center)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, Pose,
+                                                    Point, set_joint_positions, joint_from_name,
+                                                    multiply, invert, get_aabb_volume,
+                                                    Euler, get_aabb_center)
 import numpy as np
 import time
 import datetime
 import scipy.spatial
 import pickle
-
 from utils.graph import Graph
-from environments.vamp_environment import GRID_RESOLUTION, find_min_angle
+from environments.environment import GRID_RESOLUTION, find_min_angle
 
 USE_COST = False
 
@@ -732,7 +729,7 @@ class Lamb(Planner):
             list: The path from start to goal.
         """
         # Timing the search for benchmarking purposes.
-        current_t = time.clock_gettime_ns(0)
+        current_t = time.time()
         extended = set()
         paths = [([q_start], 0, 0)]
 
@@ -747,7 +744,7 @@ class Lamb(Planner):
 
             # If goal is found return it, graph the search, and output the elapsed time.
             if best_path[-1] == q_goal:
-                done = time.clock_gettime_ns(0) - current_t
+                done = time.time() - current_t
                 if self.debug:
                     print(done * (10 ** (-9)))
                     self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
@@ -766,7 +763,7 @@ class Lamb(Planner):
             else:
                 paths = sorted(paths, key=lambda x: x[-1], reverse=True)
 
-        done = time.clock_gettime_ns(0) - current_t
+        done = time.time() - current_t
         if self.debug:
             print(done * (10 ** (-9)))
             self.G.plot_search(self.env, extended, goal=q_goal)

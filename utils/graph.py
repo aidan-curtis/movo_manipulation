@@ -3,7 +3,7 @@ from matplotlib import collections  as mc
 from matplotlib.patches import Rectangle, Arrow
 import numpy as np
 from pybullet_planning.pybullet_tools.utils import get_aabb, wait_if_gui
-from environments.vamp_environment import GRID_RESOLUTION
+from environments.environment import GRID_RESOLUTION
 
 
 class Graph:
