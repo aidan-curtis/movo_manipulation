@@ -52,6 +52,23 @@ class Graph:
             self.neighbors[idx] = []
         return idx
 
+    def dettach_vex(self, pos):
+        """
+        Dettach a vertex from all of its neighbors, eliminating all the edges to and from it
+
+        Args:
+            pos (tuple): position of the vertex to add.
+        """
+        idx = self.vex2idx[pos]
+        self.vex2idx[pos] = None
+        for idx2 in self.neighbors[idx]:
+            if (idx, idx2) in self.edges:
+                self.edges.remove((idx, idx2))
+            else:
+                self.edges.remove((idx2, idx))
+            self.neighbors[idx2].remove(idx)
+        self.neighbors[idx] = None
+
 
     def add_edge(self, idx1, idx2):
         """

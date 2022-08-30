@@ -12,9 +12,15 @@ from environments.side_path import SidePath
 from environments.single_movable import SingleMovable
 from environments.double_movable import DoubleMovable
 from environments.single_hallway import SingleHallway
+from environments.attach_obstructed import AttObs
+from environments.subgoal_obstructed import SubObs
+from environments.simple_namo import SimpleNamo
+from environments.simple_vision import SimpleVision
 import pickle 
 from datetime import datetime
 import os
+import sys
+
 
 PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
@@ -29,7 +35,11 @@ ENVIRONMENTS = {"empty": Empty,
                 "side_path": SidePath,
                 "single_movable": SingleMovable,
                 "double_movable": DoubleMovable,
-                "single_hallway": SingleHallway}
+                "single_hallway": SingleHallway,
+                "attach_obstructed": AttObs,
+                "subgoal_obstructed": SubObs,
+                "simple_namo": SimpleNamo,
+                "simple_vision": SimpleVision}
 RESULTS_DIR = "./results"
 
 def get_args():
@@ -69,14 +79,16 @@ def get_args():
     parser.add_argument(
         "-d",
         "--debug",
-        type=bool,
-        default=False,
+        type=str,
+        default="False",
         help="Whether to enter in debugging mode"
     )
 
 
     args = parser.parse_args()
     return args
+
+
 
 def write_results(args, statistics):
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -91,7 +103,7 @@ if __name__=="__main__":
     env = ENVIRONMENTS[args.env]()
 
     planner = PLANNERS[args.algo](env)
-    plan = planner.get_plan(loadfile=args.load, debug=args.debug)
+    plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
     statistics = env.validate_plan(plan)
 
     #write_results(args, statistics)

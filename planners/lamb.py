@@ -10,7 +10,6 @@ import time
 import datetime
 import scipy.spatial
 import pickle
-#import pybullet as p
 
 from utils.graph import Graph
 from environments.vamp_environment import GRID_RESOLUTION, find_min_angle
@@ -242,8 +241,11 @@ class Lamb(Planner):
             q_place, grasp, obj = self.env.sample_placement(q, coll_obj, self.G, p_through_voxels.union(wrong_placements), obstructions=obstructions)
             if q_place is None:
                 print("No valid placement found. Aborting")
+                print(self.env.movable_boxes)
+                wait_if_gui()
                 self.env.movable_boxes.append(self.env.movable_object_oobb_from_q(coll_obj, q, base_grasp))
                 return False
+            print("Placement found. Planning how to reach it.")
             self.env.movable_object_oobb_from_q(coll_obj, q_place, grasp, visualize=True)
             # Look for a path to move the object
             path_exists = True

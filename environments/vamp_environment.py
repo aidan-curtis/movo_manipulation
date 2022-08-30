@@ -24,6 +24,8 @@ from functools import cached_property
 import functools
 import time
 from scipy.spatial.transform import Rotation as R
+import sys
+from contextlib import contextmanager
 
 GRID_HEIGHT = 2  # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.2  # Grid resolutions
@@ -41,11 +43,38 @@ CAMERA_MATRIX = get_camera_matrix(CAMERA_WIDTH, CAMERA_HEIGHT, fx, fy)
 FAR = 3
 
 
+@contextmanager
+def suppress_stdout():
+    """
+    Helper function to supress annoying warnings from pybullet.
+    """
+    fd = sys.stdout.fileno()
+
+    def _redirect_stdout(to):
+        sys.stdout.close()  # + implicit flush()
+        os.dup2(to.fileno(), fd)  # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, "w")  # Python writes to fd
+
+    with os.fdopen(os.dup(fd), "w") as old_stdout:
+        with open(os.devnull, "w") as file:
+            _redirect_stdout(to=file)
+        try:
+            yield  # allow code to be run with the redirected stdout
+        finally:
+            _redirect_stdout(to=old_stdout)  # restore stdout.
+            # buffering and flags such as
+            # CLOEXEC may be different
+
+
+
 class Environment(ABC):
 
     @abstractmethod
     def setup(self):
         pass
+
+    def restrict_configuration(self, G):
+        return
 
 
     def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
@@ -277,7 +306,7 @@ class Environment(ABC):
             self.default_vision[q] = self.gained_vision_from_conf(q)
 
 
-    def get_optimistic_path_vision(self, path, G, attachment=None):
+    def get_optimistic_path_vision(self, path, G, attachment=None, obstructions=set()):
         """
         Gets optimistic vision along a path. Optimistic vision is defined as the vision cone from a certain
         configuration, unless the configuration has already been viewed and the actual vision is known.
@@ -291,7 +320,7 @@ class Environment(ABC):
         """
         vision = set()
         for q in path:
-            vision.update(self.get_optimistic_vision(q, G, attachment=attachment))
+            vision.update(self.get_optimistic_vision(q, G, attachment=attachment, obstructions=obstructions))
         return vision
 
     @functools.lru_cache(typed=False)
@@ -985,15 +1014,16 @@ class Environment(ABC):
             movable (bool): Whether to show the detected movable objects or not
         """
         movable_handles = []
-        with LockRenderer():
-            p.removeAllUserDebugItems()
-            if visibility:
-                self.visibility_grid.draw_intervals()
-            if occupancy:
-                self.occupancy_grid.draw_intervals()
-            if movable:
-                for movable_box in self.movable_boxes:
-                    draw_oobb(movable_box, color=YELLOW)
+        with suppress_stdout():
+            with LockRenderer():
+                p.removeAllUserDebugItems()
+                if visibility:
+                    self.visibility_grid.draw_intervals()
+                if occupancy:
+                    self.occupancy_grid.draw_intervals()
+                if movable:
+                    for movable_box in self.movable_boxes:
+                        draw_oobb(movable_box, color=YELLOW)
         return
 
     def get_robot_vision(self):

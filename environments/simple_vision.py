@@ -5,12 +5,12 @@ import pybullet as p
 import numpy as np
 
 
-class SingleHallway(Environment):
+class SimpleVision(Environment):
     def __init__(self):
-        super(SingleHallway, self).__init__()
+        super(SimpleVision, self).__init__()
 
         self.start = (0, 0, 0)
-        self.goal = (2.4, 0, round(np.pi/2,3))  # TODO: Create separate class for configuration space
+        self.goal = (2, 0, 0)  # TODO: Create separate class for configuration space
         self.objects = []
         self.viewed_voxels = []
 
@@ -39,10 +39,10 @@ class SingleHallway(Environment):
             self.centered_oobb = self.get_centered_oobb()
 
     def create_room(self, movable_obstacles=[]):
-        width = 4
+        width = 6
         length = 6
         wall_height = 2
-        center = [1, 2]
+        center = [2, 2]
 
 
         floor1 = self.create_pillar(width=width, length=length, color=TAN)
@@ -65,11 +65,15 @@ class SingleHallway(Environment):
         set_pose(wall_4,
                  Pose(point=Point(y=center[1], x=center[0] - (width / 2 + wall_thickness / 2), z=wall_height / 2)))
 
-        wall_5 = self.create_pillar(length=3.9, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
+        wall_5 = self.create_pillar(length=4.7, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_5,
-                 Pose(point=Point(y=0.95, x=1.7, z=wall_height / 2)))
+                 Pose(point=Point(y=1.35, x=1.1, z=wall_height / 2)))
 
-        walls = [wall_1, wall_2, wall_3, wall_4, wall_5]
+        wall_6 = self.create_pillar(length=wall_thickness, width=2.5, height=wall_height, color=LIGHT_GREY)
+        set_pose(wall_6,
+                 Pose(point=Point(y=1.5, x=2.4, z=wall_height / 2)))
+
+        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6]
         floors = [floor1]
         aabb = AABB(lower=(center[0] - width / 2.0, center[1] - length / 2.0, 0.05),
                     upper=(center[0] + width / 2.0, center[1] + length / 2.0, GRID_HEIGHT))

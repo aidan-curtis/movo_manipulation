@@ -97,10 +97,10 @@ class Complex(Environment):
         wall_thickness = 0.1
         wall_1 = self.create_pillar(width=width, length=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_1, Pose(point=Point(x=center[0], y=center[1]+length/2+wall_thickness/2-0.21, z=wall_height/2)))
-        
+
         wall_2 = self.create_pillar(width=2, length=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_2, Pose(point=Point(x=0, y=center[1]-(length/2+wall_thickness/2), z=wall_height/2)))
-        
+
         wall_3 = self.create_pillar(width=2, length=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_3, Pose(point=Point(x=4, y=center[1]-(length/2+wall_thickness/2), z=wall_height/2)))
 
