@@ -1,7 +1,7 @@
 #from environments.environment import Environment
-from environments.vamp_environment import Environment
+from environments.environment import Environment
 
-from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, 
+from pybullet_planning.pybullet_tools.utils import (create_box, BROWN, 
                                                     set_pose, Pose, Point, LockRenderer)
 import pybullet as p
 

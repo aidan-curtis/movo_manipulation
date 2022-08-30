@@ -1,6 +1,6 @@
-from environments.vamp_environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 
-from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
                                                     set_joint_position, load_model, get_aabb)
 import math
@@ -19,11 +19,6 @@ class SingleMovable(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
 
     def setup(self):
 
@@ -33,18 +28,6 @@ class SingleMovable(Environment):
         self.robot = self.setup_robot()
 
         with LockRenderer():
-
-
-            # blocking_box = create_box(2,4.5,1, mass=1, color=BROWN)
-            # set_pose(blocking_box,
-                    # Pose(point=Point(
-                            # x=3,
-                            # y=1.25,
-                            # z=1/2,
-                        # )
-                    # )
-                # )
-            # self.objects_prop[blocking_box] = [2, 4.5, 1, 1]
 
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.5
@@ -78,8 +61,6 @@ class SingleMovable(Environment):
         wall_height = 2
         center = [3, 2]
 
-        hall_width = 2
-        hall_length = 3
         floor1 = self.create_pillar(width=width, length=length, color=TAN)
         floor2 = self.create_pillar(width=4, length=1, color=TAN)
         floor3 = self.create_pillar(width=4, length=1, color=TAN)

@@ -1,5 +1,5 @@
 #from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
-from environments.vamp_environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
 
 
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
@@ -23,12 +23,6 @@ class Complex(Environment):
 
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
-
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
 
 
     def setup(self):
@@ -55,14 +49,8 @@ class Complex(Environment):
                 )
             )
 
-            set_pose(blocking_box,
-                     Pose(point=Point(
-                         x=2,
-                         y=-0.72,
-                         z=1 / 2,
-                     )
-                     )
-                     )
+            set_pose(blocking_box, Pose(point=Point(x=2, y=-0.72, z=1 / 2)))
+
             chair_aabb = get_aabb(blocking_chair)
             self.objects_prop[blocking_chair] = [chair_aabb.upper[0] - chair_aabb.lower[0],
                                                  chair_aabb.upper[1] - chair_aabb.lower[1],
