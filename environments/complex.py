@@ -29,17 +29,19 @@ class Complex(Environment):
 
         self.disconnect()
         self.connect()
-        
-        self.robot = self.setup_robot()
 
         with LockRenderer():
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
 
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.5
                 )
+                
+            # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             blocking_box = create_box(1, 2.1, 1, mass=1, color=BROWN)
             self.room = self.create_room(movable_obstacles=[blocking_chair, blocking_box])
-            set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=2,

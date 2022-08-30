@@ -1,14 +1,10 @@
 from planners.rrt import RRT
-from planners.a_star_search import AStarSearch
 from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name,
                                                     invert, multiply, Pose, Point, Euler,
                                                     point_from_pose, sample_directed_reachable_base,
                                                     get_aabb_center)
 import numpy as np
-import pybullet as p
 import random
-import time
-
 
 class Snowplow(RRT):
     def __init__(self, env):

@@ -1,9 +1,8 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, set_joint_positions,
-                                                    draw_aabb, AABB, get_aabb)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, joint_from_name, 
+                                                    set_joint_positions, get_aabb)
 import numpy as np
 from itertools import product
-import time
 import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 from matplotlib.patches import Rectangle, Arrow

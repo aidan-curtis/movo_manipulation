@@ -27,6 +27,7 @@ class SidePath(Environment):
 
         self.disconnect()
         self.connect()
+        self.display_goal(self.goal)
 
         self.robot = self.setup_robot()
 

@@ -24,16 +24,15 @@ class SingleMovable(Environment):
 
         self.disconnect()
         self.connect()
-        
-        self.robot = self.setup_robot()
 
         with LockRenderer():
-
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             blocking_chair = load_model(
                     "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-                )
-
-            set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            )
+            # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=3,

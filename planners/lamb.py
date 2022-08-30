@@ -1,5 +1,5 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pose,
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, Pose,
                                                     Point, set_joint_positions, joint_from_name,
                                                     multiply, invert, get_aabb_volume,
                                                     Euler, get_aabb_center)

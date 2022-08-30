@@ -1,4 +1,4 @@
-from pybullet_planning.pybullet_tools.utils import (LockRenderer, load_pybullet, set_joint_positions, joint_from_name,
+from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet, set_joint_positions, joint_from_name,
                                                     Point, Pose, Euler,
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert, multiply,
@@ -142,7 +142,7 @@ class Environment(ABC):
         # Get collision from lidar
         for voxel in self.lidar_scan(q):
             self.occupancy_grid.set_occupied(voxel)
-
+    
     def disconnect(self):
         try:
             p.disconnect()
@@ -318,6 +318,7 @@ class Environment(ABC):
     def connect(self):
         p.connect(p.GUI)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+        p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
 
 
 
@@ -1011,6 +1012,13 @@ class Environment(ABC):
         camera_image = get_image_at_pose(camera_pose, CAMERA_MATRIX, far=FAR, segment=True)
 
         return camera_pose, camera_image
+
+    def display_goal(self, goal):
+        GOAL_RADIUS = 0.4
+        GOAL_HEIGHT = 0.001
+        goal_pole = create_cylinder(GOAL_RADIUS, GOAL_HEIGHT, color=RGBA(0, 0.9, 0, 1))
+        set_pose(goal_pole, Pose(Point(x=goal[0], y=goal[1])))
+        return goal_pole
 
     def create_closed_room(self, length, width, center=[0, 0], wall_height=2, movable_obstacles=[]):
         """

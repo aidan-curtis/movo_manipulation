@@ -20,10 +20,10 @@ class SingleHallway(Environment):
 
         self.disconnect()
         self.connect()
-        self.robot = self.setup_robot()
 
         with LockRenderer():
-
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             self.room = self.create_room()
             self.static_objects = []
             self.setup_grids()

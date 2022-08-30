@@ -18,12 +18,11 @@ class Empty(Environment):
     def setup(self, G=None):
 
         self.disconnect()
-        
         self.connect()
 
-        self.robot = self.setup_robot()
-
         with LockRenderer():
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             self.room = self.create_closed_room(length=6, width=6)
             self.setup_grids()
 
