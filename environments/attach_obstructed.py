@@ -1,4 +1,4 @@
-from environments.vamp_environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
                                                     load_model, create_box, TAN, BROWN,
                                                     LockRenderer, AABB, get_aabb)

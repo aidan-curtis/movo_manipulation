@@ -1,4 +1,4 @@
-from environments.vamp_environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
                                                     load_model, TAN, RED,
                                                     LockRenderer, AABB, get_aabb, joint_from_name,
@@ -15,6 +15,7 @@ class SubObs(Environment):
 
         self.start = (0, 0, round(np.pi/2, 3))
         self.goal = (4, 0, round(np.pi/2, 3)) # TODO: Create separate class for configuration space
+
 
         self.objects = []
         self.viewed_voxels = []
@@ -34,7 +35,11 @@ class SubObs(Environment):
         self.disconnect()
         
         p.connect(p.GUI)
+
+        # These 3 lines are important and should be located here
         self.robot = self.setup_robot()
+        self.centered_aabb = self.get_centered_aabb()
+        self.centered_oobb = self.get_centered_oobb()
 
         self.joints = [joint_from_name(self.robot, "x"),
                        joint_from_name(self.robot, "y"),
@@ -66,8 +71,6 @@ class SubObs(Environment):
             self.objects +=  [blocking_chair]
             self.push_only = []
             self.static_objects = []
-            self.centered_aabb = self.get_centered_aabb()
-            self.centered_oobb = self.get_centered_oobb()
             self.setup_grids()
 
 

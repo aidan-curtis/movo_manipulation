@@ -1,4 +1,5 @@
-from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet, set_joint_positions, joint_from_name,
+from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet,
+                                                    set_joint_positions, joint_from_name,
                                                     Point, Pose, Euler,
                                                     set_pose, create_box, TAN, get_link_pose,
                                                     get_camera_matrix, get_image_at_pose, tform_point, invert, multiply,
@@ -6,9 +7,9 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_contains_point, aabb_from_oobb,
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb,
                                                     aabb_from_points, OOBB,
-                                                    aabb_union, aabb_overlap, scale_aabb, get_aabb_center, 
+                                                    aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection,
-                                                    get_aabb_volume)
+                                                    get_aabb_volume, wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -19,6 +20,9 @@ from collections import namedtuple, defaultdict
 import functools
 from scipy.spatial.transform import Rotation as R
 from abc import ABC
+from contextlib import contextmanager
+import sys
+
 
 GRID_HEIGHT = 2  # Height of the visibility and occupancy grids
 GRID_RESOLUTION = 0.2  # Grid resolutions
@@ -35,10 +39,63 @@ CAMERA_HEIGHT = 128
 CAMERA_MATRIX = get_camera_matrix(CAMERA_WIDTH, CAMERA_HEIGHT, fx, fy)
 FAR = 3
 
+
+@contextmanager
+def suppress_stdout():
+    """
+    Helper function to supress annoying warnings from pybullet.
+    """
+    fd = sys.stdout.fileno()
+
+    def _redirect_stdout(to):
+        sys.stdout.close()  # + implicit flush()
+        os.dup2(to.fileno(), fd)  # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, "w")  # Python writes to fd
+
+    with os.fdopen(os.dup(fd), "w") as old_stdout:
+        with open(os.devnull, "w") as file:
+            _redirect_stdout(to=file)
+        try:
+            yield  # allow code to be run with the redirected stdout
+        finally:
+            _redirect_stdout(to=old_stdout)  # restore stdout.
+            # buffering and flags such as
+            # CLOEXEC may be different
+
 class Environment(ABC):
 
     def __init__(self):
         pass
+
+    def restrict_configuration(self, G):
+        return
+
+
+    def validate_plan(self, plan):
+        self.setup()
+        # TODO change how intersections with walls are found, right now it
+        # finds collisions easily because of how we check the collisions with the voxels
+        for q, attachment in plan:
+            self.move_robot(q, self.joints, attachment)
+            for wall in self.room.walls:
+                wall_aabb = get_aabb(wall)
+                if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
+                    return False, (q, attachment)
+                if attachment is not None:
+                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
+                    if aabb_overlap(wall_aabb, obj_aabb):
+                        return False, (q, attachment)
+
+            for obj in self.room.movable_obstacles:
+                object_aabb = get_aabb(obj)
+                if aabb_overlap(object_aabb, self.aabb_from_q(q)):
+                    return False, (q, attachment)
+                if attachment is not None:
+                    if attachment[2] != obj:
+                        obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
+                        if aabb_overlap(object_aabb, obj_aabb):
+                            return False, (q, attachment)
+        return True, None
 
     def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
         """
@@ -140,8 +197,8 @@ class Environment(ABC):
                     point = labeled_point.point
                     self.occupancy_grid.add_point(point)
         # Get collision from lidar
-        for voxel in self.lidar_scan(q):
-            self.occupancy_grid.set_occupied(voxel)
+        # for voxel in self.lidar_scan(q):
+        #     self.occupancy_grid.set_occupied(voxel)
     
     def disconnect(self):
         try:
@@ -275,7 +332,7 @@ class Environment(ABC):
             self.default_vision[q] = self.gained_vision_from_conf(q)
 
 
-    def get_optimistic_path_vision(self, path, G, attachment=None):
+    def get_optimistic_path_vision(self, path, G, attachment=None, obstructions=set()):
         """
         Gets optimistic vision along a path. Optimistic vision is defined as the vision cone from a certain
         configuration, unless the configuration has already been viewed and the actual vision is known.
@@ -289,7 +346,7 @@ class Environment(ABC):
         """
         vision = set()
         for q in path:
-            vision.update(self.get_optimistic_vision(q, G, attachment=attachment))
+            vision.update(self.get_optimistic_vision(q, G, attachment=attachment, obstructions=obstructions))
         return vision
 
     @functools.lru_cache(typed=False)
@@ -317,7 +374,7 @@ class Environment(ABC):
                     
     def connect(self):
         p.connect(p.GUI)
-        p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
         p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
 
 
@@ -974,6 +1031,10 @@ class Environment(ABC):
 
         self.camera_pose = get_link_pose(robot_body,
                                          link_from_name(robot_body, "kinect2_rgb_optical_frame"))
+
+        self.joints = [joint_from_name(robot_body, "x"),
+                       joint_from_name(robot_body, "y"),
+                       joint_from_name(robot_body, "theta")]
         return robot_body
 
     def plot_grids(self, visibility=False, occupancy=False, movable=False):
@@ -986,15 +1047,16 @@ class Environment(ABC):
             movable (bool): Whether to show the detected movable objects or not
         """
         movable_handles = []
-        with LockRenderer():
-            p.removeAllUserDebugItems()
-            if visibility:
-                self.visibility_grid.draw_intervals()
-            if occupancy:
-                self.occupancy_grid.draw_intervals()
-            if movable:
-                for movable_box in self.movable_boxes:
-                    draw_oobb(movable_box, color=YELLOW)
+        with suppress_stdout():
+            with LockRenderer():
+                p.removeAllUserDebugItems()
+                if visibility:
+                    self.visibility_grid.draw_intervals()
+                if occupancy:
+                    self.occupancy_grid.draw_intervals()
+                if movable:
+                    for movable_box in self.movable_boxes:
+                        draw_oobb(movable_box, color=YELLOW)
         return
 
     def get_robot_vision(self):
@@ -1012,6 +1074,28 @@ class Environment(ABC):
         camera_image = get_image_at_pose(camera_pose, CAMERA_MATRIX, far=FAR, segment=True)
 
         return camera_pose, camera_image
+
+    def get_circular_vision(self, q, G, radius=1):
+        """
+        Gets a set of voxels that form a circle around a given point.
+
+        Args:
+            q (tuple): Center of the circle.
+            radius (float): Radius of the circle
+            G : Graph object that contains the discrete space
+        Returns:
+            set: A set of voxels representing a circular area around the center with the given radius.
+        """
+        grid = self.static_vis_grid
+        surface_aabb = grid.aabb
+        voxels = set()
+        for voxel in grid.voxels_from_aabb(surface_aabb):
+            actual_q = (q[0], q[1], 0)
+            actual_vox = np.array(voxel) * np.array(G.res)
+            if distance(actual_vox, actual_q) <= radius:
+                voxels.add(voxel)
+        return voxels
+
 
     def display_goal(self, goal):
         GOAL_RADIUS = 0.4

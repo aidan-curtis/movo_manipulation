@@ -1,4 +1,5 @@
 import argparse
+from pybullet_planning.pybullet_tools.utils import wait_if_gui
 from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
@@ -9,7 +10,7 @@ from environments.empty import Empty
 from environments.complex import Complex
 from environments.side_path import SidePath
 from environments.single_movable import SingleMovable
-from environments.single_hallway import SingleHallway
+from environments.simple_navigation import SimpleNavigation
 from environments.attach_obstructed import AttObs
 from environments.subgoal_obstructed import SubObs
 from environments.simple_namo import SimpleNamo
@@ -17,7 +18,6 @@ from environments.simple_vision import SimpleVision
 import pickle 
 from datetime import datetime
 import os
-import sys
 
 
 PLANNERS = {"snowplow": Snowplow,
@@ -31,7 +31,7 @@ ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
                 "side_path": SidePath,
                 "single_movable": SingleMovable,
-                "single_hallway": SingleHallway,
+                "simple_navigation": SimpleNavigation,
                 "attach_obstructed": AttObs,
                 "subgoal_obstructed": SubObs,
                 "simple_namo": SimpleNamo,
@@ -101,6 +101,9 @@ if __name__=="__main__":
 
     planner = PLANNERS[args.algo](env)
     plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+    print(plan)
+    wait_if_gui()
     statistics = env.validate_plan(plan)
-
+    print(statistics)
+    wait_if_gui()
     #write_results(args, statistics)

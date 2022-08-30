@@ -1,12 +1,12 @@
-from environments.vamp_environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, Point, LockRenderer)
 import pybullet as p
 import numpy as np
 
 
-class SingleHallway(Environment):
+class SimpleNavigation(Environment):
     def __init__(self):
-        super(SingleHallway, self).__init__()
+        super(SimpleNavigation, self).__init__()
 
         self.start = (0, 0, 0)
         self.goal = (2.4, 0, round(np.pi/2,3))  # TODO: Create separate class for configuration space

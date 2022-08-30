@@ -56,7 +56,7 @@ class Lamb(Planner):
         self.debug = debug
         q_start, q_goal = self.env.start, self.env.goal
         # Gets initial vision and updates the current vision based on it
-        self.v_0 = self.get_circular_vision(q_start)
+        self.v_0 = self.env.get_circular_vision(q_start, self.G)
         self.env.update_vision_from_voxels(self.v_0)
 
         # Gathers vision from the robot's starting position and updates the
@@ -672,28 +672,6 @@ class Lamb(Planner):
                         actions.append((q_prime, distance(q, q_prime)))
 
         return actions
-
-
-    def get_circular_vision(self, q, radius=1):
-        """
-        Gets a set of voxels that form a circle around a given point.
-
-        Args:
-            q (tuple): Center of the circle.
-            radius (float): Radius of the circle
-        Returns:
-            set: A set of voxels representing a circular area around the center with the given radius.
-        """
-        grid = self.env.static_vis_grid
-        surface_aabb = grid.aabb
-        voxels = set()
-        for voxel in grid.voxels_from_aabb(surface_aabb):
-            actual_q = (q[0], q[1], 0)
-            actual_vox = np.array(voxel) * np.array(self.G.res)
-            if distance(actual_vox, actual_q) <= radius:
-                voxels.add(voxel)
-        return voxels
-
 
     def volume_from_voxels(self, grid, voxels):
         """
