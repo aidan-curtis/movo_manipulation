@@ -4,6 +4,7 @@
 Install dependencies
 
 ``git submodule update --init --recursive``
+
 ``python -m pip install -r requirements.txt``
 
 Run an experiment
