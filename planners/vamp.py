@@ -1,17 +1,13 @@
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, AABB, OOBB, Pose, draw_oobb, LockRenderer,
-                                                    Point, draw_aabb, set_joint_positions, joint_from_name,
-                                                    get_link_pose, link_from_name, get_camera_matrix, draw_pose,
-                                                    multiply, tform_point, invert, pixel_from_point, get_aabb_volume,
-                                                    get_aabb_vertices)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, set_joint_positions, 
+                                                    joint_from_name, get_aabb_volume)
 import numpy as np
 import time
 import datetime
 import scipy.spatial
 import pickle
-
 from utils.graph import Graph
-from environments.vamp_environment import GRID_RESOLUTION, find_min_angle
+from environments.environment import GRID_RESOLUTION, find_min_angle
 
 
 class Vamp(Planner):
@@ -41,7 +37,7 @@ class Vamp(Planner):
         self.complete = None
         self.current_q = None
 
-    def get_plan(self, loadfile=None):
+    def get_plan(self, loadfile=None, **kwargs):
         """
         Creates a plan and executes it based on the given planner and environment.
 

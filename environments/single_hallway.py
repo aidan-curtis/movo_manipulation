@@ -1,11 +1,5 @@
-#from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
-from environments.vamp_environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
-
-from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
-                                                    set_pose, Pose, Point, LockRenderer,
-                                                    set_joint_position, load_model, get_aabb)
-import math
-import random
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, Point, LockRenderer)
 import pybullet as p
 import numpy as np
 
@@ -22,21 +16,14 @@ class SingleHallway(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
     def setup(self):
 
         self.disconnect()
-
-        p.connect(p.GUI)
-        self.robot = self.setup_robot()
+        self.connect()
 
         with LockRenderer():
-
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             self.room = self.create_room()
             self.static_objects = []
             self.setup_grids()

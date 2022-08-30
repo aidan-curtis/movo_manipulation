@@ -7,10 +7,8 @@ from planners.lamb import Lamb
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
-from environments.work_tradeoff import WorkTradeoff
 from environments.side_path import SidePath
 from environments.single_movable import SingleMovable
-from environments.double_movable import DoubleMovable
 from environments.single_hallway import SingleHallway
 import pickle 
 from datetime import datetime
@@ -25,11 +23,10 @@ PLANNERS = {"snowplow": Snowplow,
 
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
-                "work_tradeoff": WorkTradeoff,
                 "side_path": SidePath,
                 "single_movable": SingleMovable,
-                "double_movable": DoubleMovable,
                 "single_hallway": SingleHallway}
+                
 RESULTS_DIR = "./results"
 
 def get_args():
