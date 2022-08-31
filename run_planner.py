@@ -32,7 +32,7 @@ ENVIRONMENTS = {"empty": Empty,
                 "side_path": SidePath,
                 "single_movable": SingleMovable,
                 "simple_navigation": SimpleNavigation,
-                "attach_obstructed": AttObs,
+                "attachment_obstructed": AttObs,
                 "subgoal_obstructed": SubObs,
                 "simple_namo": SimpleNamo,
                 "simple_vision": SimpleVision}

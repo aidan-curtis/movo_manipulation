@@ -38,6 +38,7 @@ class AStarSearch(Planner):
         q_start, q_goal = self.env.start, self.env.goal
         # Gets initial vision and updates the current vision based on it
         self.v_0 = self.env.get_circular_vision(q_start, self.G)
+        self.env.update_vision_from_voxels(self.v_0)
 
         # Gathers vision from the robot's starting position and updates the
         # visibility and occupancy grids. Visualize them for convenience.
@@ -85,7 +86,7 @@ class AStarSearch(Planner):
 
             # Check for whether the new node is in obstruction with any obstacle.
             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set())
-            if not collisions.shape[0] > 0:
+            if not collisions.shape[0] > 0 and coll_objects is None:
                 actions.append((q_prime, distance(q, q_prime)))
         return actions
 

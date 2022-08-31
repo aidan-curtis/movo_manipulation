@@ -95,6 +95,9 @@ class Environment(ABC):
                         obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
                         if aabb_overlap(object_aabb, obj_aabb):
                             return False, (q, attachment)
+
+        if q != self.goal:
+            return False, None
         return True, None
 
     def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
