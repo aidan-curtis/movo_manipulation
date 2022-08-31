@@ -13,7 +13,7 @@ class SubObs(Environment):
     def __init__(self):
         super(SubObs, self).__init__()
 
-        self.start = (0, 0, round(np.pi/2, 3))
+        self.start = (0, 0, 0)
         self.goal = (4, 0, round(np.pi/2, 3)) # TODO: Create separate class for configuration space
 
 

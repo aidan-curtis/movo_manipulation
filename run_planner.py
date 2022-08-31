@@ -1,10 +1,11 @@
 import argparse
-from pybullet_planning.pybullet_tools.utils import wait_if_gui
+from pybullet_planning.pybullet_tools.utils import wait_if_gui, draw_aabb, get_aabb, scale_aabb
 from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT
 from planners.vamp import Vamp
 from planners.lamb import Lamb
+from planners.namo import Namo
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
@@ -22,6 +23,7 @@ import os
 
 PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
+            "namo": Namo,
             "rrt": RRT,
             "vamp": Vamp,
             "lamb": Lamb,
@@ -104,6 +106,10 @@ if __name__=="__main__":
     print(plan)
     wait_if_gui()
     statistics = env.validate_plan(plan)
+
     print(statistics)
+    for q, att in statistics[1]:
+        env.move_robot(q, env.joints, att)
+        wait_if_gui()
     wait_if_gui()
     #write_results(args, statistics)

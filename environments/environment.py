@@ -1,3 +1,5 @@
+import random
+
 from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet,
                                                     set_joint_positions, joint_from_name,
                                                     Point, Pose, Euler,
@@ -73,6 +75,7 @@ class Environment(ABC):
 
     def validate_plan(self, plan):
         self.setup()
+        collisions = []
         # TODO change how intersections with walls are found, right now it
         # finds collisions easily because of how we check the collisions with the voxels
         for q, attachment in plan:
@@ -80,25 +83,31 @@ class Environment(ABC):
             for wall in self.room.walls:
                 wall_aabb = get_aabb(wall)
                 if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
-                    return False, (q, attachment)
+                    collisions.append((q, attachment))
+                    break
                 if attachment is not None:
-                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
+                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
                     if aabb_overlap(wall_aabb, obj_aabb):
-                        return False, (q, attachment)
+                        collisions.append((q, attachment))
+                        break
 
             for obj in self.room.movable_obstacles:
-                object_aabb = get_aabb(obj)
-                if aabb_overlap(object_aabb, self.aabb_from_q(q)):
-                    return False, (q, attachment)
                 if attachment is not None:
-                    if attachment[2] != obj:
-                        obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
-                        if aabb_overlap(object_aabb, obj_aabb):
-                            return False, (q, attachment)
+                    if attachment[2] == obj:
+                        continue
+                object_aabb = scale_aabb(get_aabb(obj), 0.8)
+                if aabb_overlap(object_aabb, self.aabb_from_q(q)):
+                    collisions.append((q, attachment))
+                    break
+                if attachment is not None:
+                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+                    if aabb_overlap(object_aabb, obj_aabb):
+                        collisions.append((q, attachment))
+                        break
 
-        if q != self.goal:
-            return False, None
-        return True, None
+        if q != self.goal or len(collisions) != 0:
+            return False, collisions
+        return True, collisions
 
     def update_movable_boxes(self, camera_image, ignore_obstacles=[], **kwargs):
         """
@@ -653,6 +662,12 @@ class Environment(ABC):
                         candidates.add(q)
         return candidates
 
+    def get_movable_box_from_obj(self, obj):
+        for movable_box in self.movable_boxes:
+            if aabb_contains_point(get_aabb_center(movable_box.aabb), get_aabb(obj)):
+                return movable_box
+
+
     def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set()):
         """
         Samples a placement position for an object such that it does not collide with a given path
@@ -686,7 +701,8 @@ class Environment(ABC):
         # Look for a random configuration and return it only if it is valid.
         while not good:
             rand_q = G.rand_vex(self)
-            if aabb_overlap(coll_obj.aabb, self.aabb_from_q(rand_q)):
+            aabb = self.movable_object_oobb_from_q(coll_obj, rand_q, base_grasp).aabb
+            if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
             obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
                                                     attachment=[coll_obj, base_grasp])
@@ -727,11 +743,12 @@ class Environment(ABC):
             placements = [(q_start[0], round(x, 1), q_start[2])
                           for x in np.arange(q_start[1], room_aabb[0][1], -G.res[1])]
 
-        good = False
-        idxs = np.random.randint(0, len(placements), size=len(placements))
+        idxs = list(range(len(placements)))
+        random.shuffle(idxs)
         for idx in idxs:
             rand_q = placements[idx]
-            if aabb_overlap(coll_obj.aabb, self.aabb_from_q(rand_q)):
+            aabb = self.movable_object_oobb_from_q(coll_obj, rand_q, base_grasp).aabb
+            if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
             obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
                                                     attachment=[coll_obj, base_grasp])
@@ -937,18 +954,17 @@ class Environment(ABC):
         for q in path:
             # Check for obstruction with the obstacles grid.
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1 )
+            vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
 
-
-            if(occupancy_points is None):
+            if occupancy_points is None:
                 occupancy_points = occ_points[vis_idx]
 
             else:
-                occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]] , axis=0)
+                occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
 
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
-                                           (occ_points_from_obs <= aabb.upper), axis=1 )
+                                           (occ_points_from_obs <= aabb.upper), axis=1)
                 occupancy_points = np.concatenate([occupancy_points,
                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
@@ -956,7 +972,7 @@ class Environment(ABC):
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
                 vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
 
-                if (occupancy_points is None):
+                if occupancy_points is None:
                     occupancy_points = occ_points[vis_idx]
                 else:
                     occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
