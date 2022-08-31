@@ -20,25 +20,16 @@ class SimpleNamo(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
     def setup(self):
 
         self.disconnect()
-
-        p.connect(p.GUI)
-        self.robot = self.setup_robot()
+        self.connect()
 
         with LockRenderer():
+            self.robot = self.setup_robot()
+            self.display_goal(self.goal)
 
-
-            blocking_chair = load_model(
-                "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-            )
+            blocking_chair = self.add_chair()
 
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,

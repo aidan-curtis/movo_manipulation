@@ -23,34 +23,27 @@ class SubObs(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
-
     def setup(self):
 
         self.disconnect()
-        
-        p.connect(p.GUI)
-
-        # These 3 lines are important and should be located here
-        self.robot = self.setup_robot()
-        self.centered_aabb = self.get_centered_aabb()
-        self.centered_oobb = self.get_centered_oobb()
-
-        self.joints = [joint_from_name(self.robot, "x"),
-                       joint_from_name(self.robot, "y"),
-                       joint_from_name(self.robot, "theta")]
-        set_joint_positions(self.robot, self.joints, self.start)
+        self.connect()
 
         with LockRenderer():
 
-            blocking_chair = load_model(
-                    "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-                )
+            self.display_goal(self.goal)
+            # These 3 lines are important and should be located here
+            self.robot = self.setup_robot()
+            self.centered_aabb = self.get_centered_aabb()
+            self.centered_oobb = self.get_centered_oobb()
+
+            self.joints = [joint_from_name(self.robot, "x"),
+                        joint_from_name(self.robot, "y"),
+                        joint_from_name(self.robot, "theta")]
+            set_joint_positions(self.robot, self.joints, self.start)
+            
+
+            blocking_chair = self.add_chair()
+            
             self.room = self.create_room(movable_obstacles=[blocking_chair])
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
@@ -83,7 +76,7 @@ class SubObs(Environment):
         floor1 = self.create_pillar(width=width, length=length, color=TAN)
         set_pose(floor1, Pose(Point(x=center[0], y=center[1])))
 
-        floor2 = self.create_pillar(width=1.9, length=3.8, color=RED)
+        floor2 = self.create_pillar(width=1.9, length=3.8, color=TAN)
         set_pose(floor2, Pose(Point(x=4+0.05, y=0.9, z=0.001)))
 
         wall_thickness = 0.1
@@ -107,9 +100,9 @@ class SubObs(Environment):
         set_pose(wall_5,
                  Pose(point=Point(y=0.95, x=1.1, z=wall_height / 2)))
 
-        wall_6 = self.create_pillar(length=3.9, width=wall_thickness, height=0.1, color=LIGHT_GREY)
+        wall_6 = self.create_pillar(length=3.9, width=wall_thickness, height=0.3, color=LIGHT_GREY)
         set_pose(wall_6,
-                 Pose(point=Point(y=0.95, x=3.1, z=0.05)))
+                 Pose(point=Point(y=0.95, x=3.1, z=0.15)))
 
         walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6]
         floors = [floor1, floor2]

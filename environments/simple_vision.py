@@ -17,21 +17,14 @@ class SimpleVision(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
     def setup(self):
 
         self.disconnect()
-
-        p.connect(p.GUI)
-        self.robot = self.setup_robot()
+        self.connect()
 
         with LockRenderer():
-
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
             self.room = self.create_room()
             self.static_objects = []
             self.setup_grids()

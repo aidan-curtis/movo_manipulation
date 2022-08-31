@@ -21,25 +21,16 @@ class AttObs(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
-
     def setup(self):
 
         self.disconnect()
+        self.connect()
         
-        p.connect(p.GUI)
-        self.robot = self.setup_robot()
-
         with LockRenderer():
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
 
-            blocking_chair = load_model(
-                    "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-                )
+            blocking_chair = self.add_chair()
             blocking_box = create_box(1, 1.5, 1, mass=1, color=BROWN)
             self.room = self.create_room(movable_obstacles=[blocking_chair, blocking_box])
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))

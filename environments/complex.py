@@ -2,7 +2,7 @@
 from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
 
 
-from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
+from pybullet_planning.pybullet_tools.utils import (RGBA, set_pose, set_joint_position, Pose, Point,
                                                     load_model, create_box, TAN, BROWN,
                                                     LockRenderer, AABB, get_aabb)
 import random
@@ -33,13 +33,11 @@ class Complex(Environment):
         with LockRenderer():
             self.display_goal(self.goal)
             self.robot = self.setup_robot()
-
-            blocking_chair = load_model(
-                    "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-                )
+            blocking_chair = self.add_chair()
                 
             # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
-            blocking_box = create_box(1, 2.1, 1, mass=1, color=BROWN)
+            LIGHT_BROWN = RGBA(0.596, 0.463, 0.329, 1)
+            blocking_box = create_box(1, 2.1, 1, mass=1, color=LIGHT_BROWN)
             self.room = self.create_room(movable_obstacles=[blocking_chair, blocking_box])
             
             set_pose(blocking_chair,
