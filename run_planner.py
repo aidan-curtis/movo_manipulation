@@ -16,6 +16,7 @@ from environments.attach_obstructed import AttObs
 from environments.subgoal_obstructed import SubObs
 from environments.simple_namo import SimpleNamo
 from environments.simple_vision import SimpleVision
+from environments.real_world import RealWorld
 import pickle 
 from datetime import datetime
 import os
@@ -37,7 +38,8 @@ ENVIRONMENTS = {"empty": Empty,
                 "attachment_obstructed": AttObs,
                 "subgoal_obstructed": SubObs,
                 "simple_namo": SimpleNamo,
-                "simple_vision": SimpleVision}
+                "simple_vision": SimpleVision,
+                "real_world": RealWorld}
 
 RESULTS_DIR = "./results"
 

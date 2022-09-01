@@ -758,8 +758,8 @@ class Lamb(Planner):
             tuple: A tuple containing the state where execution stopped, whether it was able to reach the goal,
              the gained vision, and the collided movable object.
         """
-        print("About to execute path")
-        wait_if_gui()
+        # print("About to execute path")
+        # wait_if_gui()
 
         gained_vision = set()
         for qi, q in enumerate(path):
