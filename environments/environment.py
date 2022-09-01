@@ -67,7 +67,7 @@ def suppress_stdout():
 class Environment(ABC):
 
     def __init__(self):
-        pass
+        self.push_only = []
 
     def restrict_configuration(self, G):
         return
@@ -1126,12 +1126,13 @@ class Environment(ABC):
         return voxels
 
 
-    def display_goal(self, goal):
-        GOAL_RADIUS = 0.4
-        GOAL_HEIGHT = 4
-        goal_pole = create_cylinder(GOAL_RADIUS, GOAL_HEIGHT, color=RGBA(0, 0.9, 0, 0.4))
-        set_pose(goal_pole, Pose(Point(x=goal[0], y=goal[1], z=-GOAL_HEIGHT/2.0+0.1)))
-        return goal_pole
+    def display_goal(self, goal, display=False):
+        if(display):
+            GOAL_RADIUS = 0.4
+            GOAL_HEIGHT = 4
+            goal_pole = create_cylinder(GOAL_RADIUS, GOAL_HEIGHT, color=RGBA(0, 0.9, 0, 0.4))
+            set_pose(goal_pole, Pose(Point(x=goal[0], y=goal[1], z=-GOAL_HEIGHT/2.0+0.1)))
+            return goal_pole
 
     def create_closed_room(self, length, width, center=[0, 0], wall_height=2, movable_obstacles=[]):
         """
