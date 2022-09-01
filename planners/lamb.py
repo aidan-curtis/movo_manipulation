@@ -627,7 +627,8 @@ class Lamb(Planner):
             # to depict this.
             if attachment is not None:
                 if attachment[2] in self.env.push_only:
-                    angle = round(np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0]), 3)
+                    angle = np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0])
+                    angle = round(angle + 2 * np.pi, 3) if angle < 0 else round(angle, 3)
                     if angle != q[2] or q_prime[2] != q[2]:
                         continue
 

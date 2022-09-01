@@ -27,6 +27,8 @@ class Graph:
         self.neighbors = dict()
         # A dictionary containing the distance of every edge.
         self.distances = dict()
+        # A dictionary containing neighbors from only rotating
+        self.rot_neighbors = dict()
 
         # The step of the angle theta as discretized by the graph
         self.t_step = None
@@ -50,6 +52,7 @@ class Graph:
             self.vertices.append(pos)
             self.vex2idx[pos] = idx
             self.neighbors[idx] = []
+            self.rot_neighbors[idx] = []
         return idx
 
     def dettach_vex(self, pos):
@@ -70,6 +73,26 @@ class Graph:
         self.neighbors[idx] = None
 
 
+
+    def get_vertex_rot(self, vex, direction):
+        """
+        Returns a neeighbor to a vertex from a rotation
+
+        Args:
+            vex (tuple): The vertex to get its neighbor from
+            direction(int): Either -1 or 1 depending on the direction. 1 for counterclockwise
+                            -1 for clockwise
+        Returns:
+            The vertex after the executed rotation
+        """
+        new_rot = vex[2] + direction*self.res[2]
+        new_rot = new_rot + 2 * np.pi if new_rot < 0 else new_rot
+        new_rot = new_rot - 2 * np.pi if round(new_rot, 2) >= round(2 * np.pi, 2) else new_rot
+
+        rot_1, rot_2 = (self.vertices[x] for x in self.rot_neighbors[self.vex2idx[vex]])
+        return min(rot_1, rot_2, key=lambda x: abs(x[2] - new_rot))
+
+
     def add_edge(self, idx1, idx2):
         """
         Adds an edge between two vertices
@@ -81,6 +104,9 @@ class Graph:
         self.edges.append((idx1, idx2))
         self.neighbors[idx1].append(idx2)
         self.neighbors[idx2].append(idx1)
+        if self.vertices[idx1][:2] == self.vertices[idx2][:2]:
+            self.rot_neighbors[idx1].append(idx2)
+            self.rot_neighbors[idx2].append(idx1)
 
 
     def initialize_full_graph(self, env, resolution):

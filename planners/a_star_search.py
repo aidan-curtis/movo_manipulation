@@ -83,6 +83,12 @@ class AStarSearch(Planner):
             if q_prime in extended:
                 continue
 
+            # Restrict A* to only move forward or rotate
+            angle = np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0])
+            angle = round(angle + 2*np.pi, 3) if angle < 0 else round(angle, 3)
+            if q[:2] != q_prime[:2] and (angle != q[2]):
+                continue
+
             # Check for whether the new node is in obstruction with any obstacle.
             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set())
             if not collisions.shape[0] > 0 and coll_objects is None:
@@ -169,6 +175,36 @@ class AStarSearch(Planner):
             self.env.plot_grids(visibility=True, occupancy=True, movable=True)
 
         return q, True, gained_vision, executed
+
+
+
+    def adjust_angles(self, path):
+        final_path = [path[0]]
+        for i in range(1, len(path)):
+            if path[i-1][:2] == path[i][:2]:
+                continue
+            curr_angle = final_path[-1][2]
+            angle = np.arctan2(path[i][1] - path[i-1][1], path[i][0] - path[i-1][0])
+            angle = angle + 2*np.pi if angle < 0 else angle
+            angle_traverse = 1 if find_min_angle(curr_angle, angle) > 0 else -1
+            while round(curr_angle, 3) != round(angle, 3):
+                curr_node = (final_path[-1][0], final_path[-1][1], curr_angle)
+                curr_angle = self.G.get_vertex_rot(curr_node, angle_traverse)[2]
+                final_path.append((path[i-1][0], path[i-1][1], round(curr_angle, 3)))
+            final_path.append((path[i][0], path[i][1], round(curr_angle, 3)))
+
+        if final_path[-1] != path[-1]:
+            curr_angle = final_path[-1][2]
+            angle = path[-1][2]
+            angle_traverse = 1 if find_min_angle(curr_angle, angle) > 0 else -1
+            while round(curr_angle, 3) != round(angle, 3):
+                curr_node = (final_path[-1][0], final_path[-1][1], curr_angle)
+                curr_angle = self.G.get_vertex_rot(curr_node, angle_traverse)[2]
+                final_path.append((final_path[-1][0], final_path[-1][1], round(curr_angle, 3)))
+
+        return final_path
+
+
 
 
 def distance(vex1, vex2):
