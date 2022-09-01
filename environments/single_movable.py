@@ -1,10 +1,6 @@
 from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
-
-from pybullet_planning.pybullet_tools.utils import (TAN, AABB,
-                                                    set_pose, Pose, Point, LockRenderer,
-                                                    set_joint_position, load_model, get_aabb)
-import math
-import random
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, 
+                                                    Point, LockRenderer, get_aabb)
 import pybullet as p
 
 class SingleMovable(Environment):
@@ -28,11 +24,9 @@ class SingleMovable(Environment):
         with LockRenderer():
             self.display_goal(self.goal)
             self.robot = self.setup_robot()
-            blocking_chair = load_model(
-                    "../models/partnet_mobility/179/mobility.urdf", scale=0.5
-            )
+            blocking_chair = self.add_chair()
+
             # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
-            
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=3,

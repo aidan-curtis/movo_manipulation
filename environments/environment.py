@@ -11,7 +11,7 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_from_points, OOBB,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection,
-                                                    get_aabb_volume, wait_if_gui)
+                                                    get_aabb_volume, load_model, get_link_names, get_all_links)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
@@ -992,7 +992,17 @@ class Environment(ABC):
 
         return occupancy_points, movable_coll
         
-   
+
+    def add_chair(self):
+        blocking_chair = load_model(
+                "../models/partnet_mobility/179/mobility.urdf", scale=0.5
+        )
+        chair_color = (0.8,0.8,0,1)
+        link_names = get_link_names(blocking_chair, get_all_links(blocking_chair))
+        p.changeVisualShape(blocking_chair, link_names.index("link_15"), rgbaColor=chair_color)
+        p.changeVisualShape(blocking_chair, link_names.index("link_15_helper"), rgbaColor=chair_color)
+        return blocking_chair
+
 
     def remove_movable_object(self, movable_obj):
         """
@@ -1118,9 +1128,9 @@ class Environment(ABC):
 
     def display_goal(self, goal):
         GOAL_RADIUS = 0.4
-        GOAL_HEIGHT = 0.001
-        goal_pole = create_cylinder(GOAL_RADIUS, GOAL_HEIGHT, color=RGBA(0, 0.9, 0, 1))
-        set_pose(goal_pole, Pose(Point(x=goal[0], y=goal[1])))
+        GOAL_HEIGHT = 4
+        goal_pole = create_cylinder(GOAL_RADIUS, GOAL_HEIGHT, color=RGBA(0, 0.9, 0, 0.4))
+        set_pose(goal_pole, Pose(Point(x=goal[0], y=goal[1], z=-GOAL_HEIGHT/2.0+0.1)))
         return goal_pole
 
     def create_closed_room(self, length, width, center=[0, 0], wall_height=2, movable_obstacles=[]):

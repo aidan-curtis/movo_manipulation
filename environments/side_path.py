@@ -17,21 +17,15 @@ class SidePath(Environment):
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
-    def disconnect(self):
-        try:
-            p.disconnect()
-        except:
-            pass
-
     def setup(self):
 
         self.disconnect()
         self.connect()
-        self.display_goal(self.goal)
-
-        self.robot = self.setup_robot()
-
         with LockRenderer():
+            
+            self.display_goal(self.goal)
+            self.robot = self.setup_robot()
+
             self.room = self.create_closed_room(length=6, width=10, center = [3,2])
 
 
