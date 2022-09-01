@@ -10,7 +10,7 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     get_aabb, RGBA, recenter_oobb, get_aabb, draw_oobb,
                                                     aabb_from_points, OOBB,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
-                                                    draw_aabb, aabb_intersection,
+                                                    draw_aabb, aabb_intersection, get_joint_positions,
                                                     get_aabb_volume, load_model, get_link_names, get_all_links)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.motion_planning_interface import DEFAULT_JOINTS
@@ -71,6 +71,9 @@ class Environment(ABC):
 
     def restrict_configuration(self, G):
         return
+
+    def get_current_q(self, joints):
+        return get_joint_positions(self.robot, joints)
 
 
     def validate_plan(self, plan):

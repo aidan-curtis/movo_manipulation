@@ -6,6 +6,7 @@ from planners.rrt import RRT
 from planners.vamp import Vamp
 from planners.lamb import Lamb
 from planners.namo import Namo
+from planners.rotate import Rotate
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
@@ -28,7 +29,8 @@ PLANNERS = {"snowplow": Snowplow,
             "rrt": RRT,
             "vamp": Vamp,
             "lamb": Lamb,
-            "do_nothing": DoNothing}
+            "do_nothing": DoNothing,
+            "rotate": Rotate}
 
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
