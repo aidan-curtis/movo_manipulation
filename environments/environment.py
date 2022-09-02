@@ -11,8 +11,10 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_from_points, OOBB,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection, get_joint_positions,
-                                                    get_aabb_volume, load_model, get_link_names, get_all_links)
+                                                    get_aabb_volume, load_model, get_link_names, get_all_links,
+                                                    wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
+from utils.graph import Graph
 from utils.motion_planning_interface import DEFAULT_JOINTS
 from utils.utils import iterate_point_cloud
 import pybullet as p
@@ -78,11 +80,21 @@ class Environment(ABC):
 
     def validate_plan(self, plan):
         self.setup()
+        G = Graph()
+        G.initialize_full_graph(self, [GRID_RESOLUTION, GRID_RESOLUTION, np.pi / 8])
+        self.setup_default_vision(G)
+        v_0 = self.get_circular_vision(plan[0][0], G)
+        self.update_vision_from_voxels(v_0)
         collisions = []
         # TODO change how intersections with walls are found, right now it
         # finds collisions easily because of how we check the collisions with the voxels
         for q, attachment in plan:
             self.move_robot(q, self.joints, attachment)
+            camera_pose, image_data = self.get_robot_vision()
+            self.update_visibility(camera_pose, image_data, q)
+            if attachment is None:
+                self.update_movable_boxes(image_data)
+            self.plot_grids(visibility=True)
             for wall in self.room.walls:
                 wall_aabb = get_aabb(wall)
                 if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
@@ -107,6 +119,15 @@ class Environment(ABC):
                     if aabb_overlap(object_aabb, obj_aabb):
                         collisions.append((q, attachment))
                         break
+            # Check for visibility violation
+            if len(set(self.visibility_grid.voxels_from_aabb(self.aabb_from_q(q))).intersection(set(self.visibility_grid.occupied))) > 0:
+                collisions.append((q, attachment))
+                continue
+            if attachment is not None:
+                obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+                if len(set(self.visibility_grid.voxels_from_aabb(obj_aabb)).intersection(set(self.visibility_grid.occupied))) > 0:
+                    collisions.append((q, attachment))
+                    continue
 
         if q != self.goal or len(collisions) != 0:
             return False, collisions
@@ -629,7 +650,8 @@ class Environment(ABC):
             if aabb_contains_point(get_aabb_center(movable_object.aabb), get_aabb(obj)):
                 break
 
-        if obj in self.push_only:
+        # TODO: Only sampling as if push, just to make the process of moving easier. Change later if needed
+        if obj in self.push_only or True:
             return self.sample_attachment_push(obj, G, obstructions=obstructions)
 
         # If the object can be moved freely, then sample attachments

@@ -183,6 +183,12 @@ class Namo(Planner):
             if q_prime in extended:
                 continue
 
+            # Restrict A* to only move forward or rotate
+            angle = np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0])
+            angle = round(angle + 2 * np.pi, 3) if angle < 0 else round(angle, 3)
+            if q[:2] != q_prime[:2] and (angle != q[2]):
+                continue
+
             # Check for whether the new node is in obstruction with any obstacle.
             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set(),
                                                                       ignore_movable=ignore_movable,
