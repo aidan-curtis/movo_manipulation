@@ -193,7 +193,7 @@ class Namo(Planner):
             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set(),
                                                                       ignore_movable=ignore_movable,
                                                                       attachment=attachment)
-            if not collisions.shape[0] > 0 and coll_objects is None:
+            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
                 actions.append((q_prime, distance(q, q_prime)))
         return actions
 

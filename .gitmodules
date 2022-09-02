@@ -1,3 +1,0 @@
-[submodule "pybullet_planning"]
-	path = pybullet_planning
-	url = https://github.com/aidan-curtis/pybullet-planning.git

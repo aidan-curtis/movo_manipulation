@@ -911,7 +911,7 @@ class Environment(ABC):
 
         for q in path:
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower<=vis_points) & (vis_points<=aabb.upper), axis=1 )
+            vis_idx = np.all( (aabb.lower <= vis_points) & (vis_points<=aabb.upper), axis=1 )
             voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
             # voxel = [x for x in self.env.static_vis_grid.voxels_from_aabb()
             #             if self.env.static_vis_grid.contains(x)]

@@ -40,6 +40,7 @@ class Snowplow(Planner):
         self.current_q = None
         self.final_executed = []
         self.object_poses = None
+        self.vision_q = dict()
 
 
 
@@ -89,6 +90,173 @@ class Snowplow(Planner):
         return [key for key, _group in groupby(self.final_executed)]
 
 
+
+
+    def snowplow(self, q_start, q_goal, v_0):
+        path = self.a_star(q_start, q_goal, v_0)
+        if path is None:
+            print("Can't find a direct path to goal. Looking through movable.")
+            path_relax = self.a_star(q_start, q_goal, v_0, ignore_movable=True)
+            if path_relax is None:
+                print("Can't find a path to goal")
+                return None
+
+            path = self.plan_clear_path(q_start, q_goal, path_relax, v_0)
+            if path is None:
+                print("Can't clear the obstacle")
+                return None
+
+        # Rearrange the formatting for the case of getting it from A*
+        if len(path[0]) == 3:
+            path = [(x, None) for x in path]
+        return path
+
+    def plan_clear_path(self, q_start, q_goal, p_through, v_0):
+        obj_obstruction = self.env.find_path_movable_obstruction(p_through)
+        attachment_poses = self.env.sample_attachment_poses(obj_obstruction, self.G)
+
+        p_through_voxels = self.env.visibility_voxels_from_path(p_through)
+
+        for attach_pose in attachment_poses:
+            p_attach = self.a_star(q_start, attach_pose, v_0)
+            if p_attach is None:
+                continue
+
+            print("Ready to plan placement")
+            self.env.remove_movable_object(obj_obstruction)
+            max_samplings = 5
+            i = 0
+            while True:
+                i += 1
+                if i > max_samplings:
+                    print("Max number of placement samples reached")
+                    self.env.movable_boxes.append(obj_obstruction)
+                    break
+                q_place, grasp, obj = self.env.sample_placement(p_attach[-1], obj_obstruction, self.G,
+                                                                p_through_voxels)
+                if q_place is None:
+                    print("Can't find placement. Retrying attachment")
+                    self.env.movable_boxes.append(obj_obstruction)
+                    break
+                p_place = self.a_star(attach_pose, q_place, v_0, attachment=[obj_obstruction, grasp, obj])
+                if p_place is None:
+                    print("Can't find path to placement. Finding different placement")
+                    continue
+
+                # After the clearing is done. Then find a path to the goal
+                obj_oobb_placed = self.env.movable_object_oobb_from_q(obj_obstruction, p_place[-1], grasp)
+                self.env.movable_boxes.append(obj_oobb_placed)
+                p_goal = self.a_star(p_place[-1], q_goal, v_0)
+                self.env.remove_movable_object(obj_oobb_placed)
+                if p_goal is None:
+                    print("Can't find path to goal after placement. Finding different placement")
+                    continue
+
+                self.env.movable_boxes.append(obj_obstruction)
+                return [(x, None) for x in p_attach] + [(y, obj) for y in p_place] +\
+                       [(x, None) for x in p_goal]
+        self.env.movable_boxes.append(obj_obstruction)
+        return None
+
+
+    def action_fn(self, path, v_0, extended=set(), ignore_movable=False, attachment=None):
+        """
+        Helper function to the search, that given a node, it gives all the possible actions to take with
+        the inquired cost of each. Uses the vision constraint on each node based
+        on the vision gained from the first path found to the node.
+
+        Args:
+            q (tuple): The node to expand.
+            extended (set): Set of nodes that were already extended by the search.
+        Returns:
+            list: A list of available actions with the respective costs.
+        """
+        actions = []
+        q = path[-1]
+        # Retrieve all the neighbors of the current node based on the graph of the space.
+        for q_prime_i in self.G.neighbors[self.G.vex2idx[q]]:
+            q_prime = self.G.vertices[q_prime_i]
+
+            # If the node has already been extended do not consider it.
+            if q_prime in extended:
+                continue
+
+            # Check if there is an attached object that can only be pushed and prune actions
+            # to depict this.
+            if attachment is not None:
+                if attachment[2] in self.env.push_only:
+                    angle = round(np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0]), 3)
+                    if angle != q[2] or q_prime[2] != q[2]:
+                        continue
+
+
+            # Check for whether the new node is in obstruction with any obstacle.
+            collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set(),
+                                                                      ignore_movable=ignore_movable,
+                                                                      attachment=attachment)
+            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
+                if len(path) == 1:
+                    v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+                else:
+                    v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G,
+                                                                                       attachment=attachment))
+                self.vision_q[q] = v_q
+                s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
+                if s_q.issubset(v_q):
+                    actions.append((q_prime, distance(q, q_prime)))
+        return actions
+
+
+    def a_star(self, q_start, q_goal, v_0, ignore_movable=False, attachment=None):
+        """
+        A* search algorithm.
+
+        Args:
+            q_start (tuple): Start node.
+            q_goal (tuple): Goal node.
+        Returns:
+            list: The path from start to goal.
+        """
+        # Timing the search for benchmarking purposes.
+        current_t = time.time()
+        extended = set()
+        paths = [([q_start], 0, 0)]
+
+        while paths:
+            current = paths.pop(-1)
+            best_path = current[0]
+            best_path_cost = current[1]
+
+            # Ignore a node that has already been extended.
+            if best_path[-1] in extended:
+                continue
+
+            # If goal is found return it, graph the search, and output the elapsed time.
+            if best_path[-1] == q_goal:
+                done = time.time() - current_t
+                print("Extended nodes: {}".format(len(extended)))
+                print("Search Time: {}".format(done))
+                if self.debug:
+                    self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
+                return best_path
+
+            extended.add(best_path[-1])
+            actions = self.action_fn(best_path, v_0, extended=extended, ignore_movable=ignore_movable,
+                                     attachment=attachment)
+            for action in actions:
+                paths.append((best_path + [action[0]], best_path_cost + action[1], distance(action[0], q_goal)))
+
+            # Only sorting from heuristic. Faster but change if needed
+            paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
+
+        done = time.time() - current_t
+        print("Extended nodes: {}".format(len(extended)))
+        print("Search Time: {}".format(done))
+        if self.debug:
+            self.G.plot_search(self.env, extended, goal=q_goal)
+        return None
+
+
     def execute_path(self, path):
         """
         Executes a given path in simulation until it is complete or no longer feasible.
@@ -101,7 +269,6 @@ class Snowplow(Planner):
         """
         gained_vision = set()
         executed = []
-        current_grasp, coll_obj = None, None
         attachment = None
         for qi, node in enumerate(path):
             q, obj = node
@@ -119,6 +286,14 @@ class Snowplow(Planner):
                 oobb = self.env.movable_object_oobb_from_q(attachment[0], path[qi-1][0], attachment[1])
                 self.env.movable_boxes.append(oobb)
                 attachment = None
+
+            # Check whether the next step goes into area that is unseen.
+            next_occupied = self.env.visibility_voxels_from_path([q], attachment=attachment)
+            for voxel in next_occupied:
+                if self.env.visibility_grid.contains(voxel):
+                    qi = qi - 1 if qi - 1 >= 0 else 0
+                    print("Stepping into unseen area. Aborting")
+                    return path[qi], False, gained_vision, None
 
 
             self.env.move_robot(q, self.joints, attachment=attachment)
@@ -221,6 +396,7 @@ class Snowplow(Planner):
         self.occupied_voxels = copy.occupied_voxels
         self.v_0 = copy.v_0
         self.current_q = copy.current_q
+        self.vision_q = copy.vision_q
         self.final_executed = copy.final_executed
         self.object_poses = copy.object_poses
         dbfile.close()
