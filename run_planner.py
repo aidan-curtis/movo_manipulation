@@ -113,6 +113,9 @@ if __name__=="__main__":
 
     print(statistics)
     for q, att in statistics[1]:
+        draw_aabb(env.aabb_from_q(q))
+        if att is not None:
+            draw_aabb(env.movable_object_oobb_from_q(att[0], q, att[1]).aabb)
         env.move_robot(q, env.joints, att)
         wait_if_gui()
     wait_if_gui()

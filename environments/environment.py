@@ -88,23 +88,37 @@ class Environment(ABC):
         collisions = []
         # TODO change how intersections with walls are found, right now it
         # finds collisions easily because of how we check the collisions with the voxels
+        for wall in self.room.walls:
+            for voxel in self.occupancy_grid.voxels_from_aabb(get_aabb(wall)):
+                self.occupancy_grid.set_occupied(voxel)
+
         for q, attachment in plan:
             self.move_robot(q, self.joints, attachment)
             camera_pose, image_data = self.get_robot_vision()
             self.update_visibility(camera_pose, image_data, q)
             if attachment is None:
                 self.update_movable_boxes(image_data)
-            self.plot_grids(visibility=True)
-            for wall in self.room.walls:
-                wall_aabb = get_aabb(wall)
-                if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
+            self.plot_grids(visibility=True, occupancy=True)
+
+            if len(set(self.occupancy_grid.occupied_voxels_from_aabb(self.aabb_from_q(q)))) > 0:
+                collisions.append((q, attachment))
+                break
+            if attachment is not None:
+                obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+                if len(set(self.occupancy_grid.occupied_voxels_from_aabb(obj_aabb))) > 0:
                     collisions.append((q, attachment))
-                    break
-                if attachment is not None:
-                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-                    if aabb_overlap(wall_aabb, obj_aabb):
-                        collisions.append((q, attachment))
-                        break
+                    continue
+
+            # for wall in self.room.walls:
+            #     wall_aabb = get_aabb(wall)
+            #     if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
+            #         collisions.append((q, attachment))
+            #         break
+            #     if attachment is not None:
+            #         obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+            #         if aabb_overlap(wall_aabb, obj_aabb):
+            #             collisions.append((q, attachment))
+            #             break
 
             for obj in self.room.movable_obstacles:
                 if attachment is not None:
@@ -120,12 +134,12 @@ class Environment(ABC):
                         collisions.append((q, attachment))
                         break
             # Check for visibility violation
-            if len(set(self.visibility_grid.voxels_from_aabb(self.aabb_from_q(q))).intersection(set(self.visibility_grid.occupied))) > 0:
+            if len(set(self.visibility_grid.occupied_voxels_from_aabb(self.aabb_from_q(q)))) > 0:
                 collisions.append((q, attachment))
                 continue
             if attachment is not None:
                 obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-                if len(set(self.visibility_grid.voxels_from_aabb(obj_aabb)).intersection(set(self.visibility_grid.occupied))) > 0:
+                if len(set(self.visibility_grid.occupied_voxels_from_aabb(obj_aabb))) > 0:
                     collisions.append((q, attachment))
                     continue
 
@@ -906,19 +920,23 @@ class Environment(ABC):
         """
 
         voxels = set()
-        vis_points = np.array(self.static_vis_grid.occupied_points)
-        vis_voxels = np.array(self.static_vis_grid.occupied_voxel_points)
+        # vis_points = np.array(self.static_vis_grid.occupied_points)
+        # vis_voxels = np.array(self.static_vis_grid.occupied_voxel_points)
 
         for q in path:
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower <= vis_points) & (vis_points<=aabb.upper), axis=1 )
-            voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
+            occ_voxels = self.static_vis_grid.occupied_voxels_from_aabb(aabb)
+            # vis_idx = np.all( (aabb.lower <= vis_points) & (vis_points<=aabb.upper), axis=1 )
+            # voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
+            voxels.update(occ_voxels)
             # voxel = [x for x in self.env.static_vis_grid.voxels_from_aabb()
             #             if self.env.static_vis_grid.contains(x)]
             if attachment is not None:
                 obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-                vis_idx = np.all((obj_aabb.lower <= vis_points) & (vis_points <= obj_aabb.upper), axis=1)
-                voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
+                occ_voxels = self.static_vis_grid.occupied_voxels_from_aabb(obj_aabb)
+                # vis_idx = np.all((obj_aabb.lower <= vis_points) & (vis_points <= obj_aabb.upper), axis=1)
+                # voxels.update(list([tuple(vp) for vp in vis_voxels[vis_idx]]))
+                voxels.update(occ_voxels)
         return voxels
         
     def visibility_points_from_path(self, path, attachment=None):
@@ -934,26 +952,30 @@ class Environment(ABC):
         """
 
         visibility_points = None
-        vis_points = np.array(self.visibility_grid.occupied_points)
+        # vis_points = np.array(self.visibility_grid.occupied_points)
 
         for q in path:
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower<=vis_points) & (vis_points<=aabb.upper), axis=1 )
+            # vis_idx = np.all( (aabb.lower<=vis_points) & (vis_points<=aabb.upper), axis=1 )
+            points_from_occ = self.visibility_grid.occupied_voxels_points_from_aabb(aabb)
 
             if(visibility_points is None):
-                visibility_points = vis_points[vis_idx]
+                # visibility_points = vis_points[vis_idx]
+                visibility_points = points_from_occ
             else:
-                visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]] , axis=0)
-
+                # visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]] , axis=0)
+                visibility_points = np.concatenate([visibility_points, points_from_occ], axis=0)
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-                vis_idx = np.all((aabb.lower <= vis_points) & (vis_points <= aabb.upper), axis=1)
+                # vis_idx = np.all((aabb.lower <= vis_points) & (vis_points <= aabb.upper), axis=1)
+                points_from_occ = self.visibility_grid.occupied_voxels_points_from_aabb(aabb)
 
                 if (visibility_points is None):
-                    visibility_points = vis_points[vis_idx]
+                    # visibility_points = vis_points[vis_idx]
+                    visibility_points = points_from_occ
                 else:
-                    visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]], axis=0)
-
+                    # visibility_points = np.concatenate([visibility_points, vis_points[vis_idx]], axis=0)
+                    visibility_points = np.concatenate([visibility_points, points_from_occ], axis=0)
         return visibility_points
 
 
@@ -979,14 +1001,15 @@ class Environment(ABC):
         for q in path:
             # Check for obstruction with the obstacles grid.
             aabb = self.aabb_from_q(q)
-            vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
+            points_from_occ = self.occupancy_grid.occupied_voxels_points_from_aabb(aabb)
+            # vis_idx = np.all( (aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
 
             if occupancy_points is None:
-                occupancy_points = occ_points[vis_idx]
-
+                # occupancy_points = occ_points[vis_idx]
+                occupancy_points = points_from_occ
             else:
-                occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
-
+                # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
                                            (occ_points_from_obs <= aabb.upper), axis=1)
@@ -995,12 +1018,15 @@ class Environment(ABC):
 
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-                vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
+                points_from_occ = self.occupancy_grid.occupied_voxels_points_from_aabb(aabb)
+                # vis_idx = np.all((aabb.lower <= occ_points) & (occ_points <= aabb.upper), axis=1)
 
                 if occupancy_points is None:
-                    occupancy_points = occ_points[vis_idx]
+                    # occupancy_points = occ_points[vis_idx]
+                    occupancy_points = points_from_occ
                 else:
-                    occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                    # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                    occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
 
                 if len(obstruction) > 0:
                     vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &

@@ -155,6 +155,17 @@ class VoxelGrid(object):
             product(*[range(l, u + 1) for l, u in safe_zip(voxel_lower, voxel_upper)]),
         )
 
+    def occupied_voxels_from_aabb(self, aabb):
+        vis_points = np.array(self.occupied_points)
+        vis_voxels = np.array(self.occupied_voxel_points)
+        vis_idx = np.all((aabb.lower <= vis_points) & (vis_points <= aabb.upper), axis=1)
+        return list([tuple(vp) for vp in vis_voxels[vis_idx]])
+
+    def occupied_voxels_points_from_aabb(self, aabb):
+        vis_points = np.array(self.occupied_points)
+        vis_idx = np.all((aabb.lower <= vis_points) & (vis_points <= aabb.upper), axis=1)
+        return vis_points[vis_idx]
+
     # Grid coordinate frame
     def lower_from_voxel(self, voxel):
         return np.multiply(voxel, self.resolutions)  # self.to_world(
