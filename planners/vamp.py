@@ -1,6 +1,8 @@
+from itertools import groupby
+
 from planners.planner import Planner
-from pybullet_planning.pybullet_tools.utils import (wait_if_gui, set_joint_positions, 
-                                                    joint_from_name, get_aabb_volume)
+from pybullet_planning.pybullet_tools.utils import (wait_if_gui, set_joint_positions,
+                                                    joint_from_name, get_aabb_volume, set_pose, get_pose)
 import numpy as np
 import time
 import datetime
@@ -22,6 +24,9 @@ class Vamp(Planner):
         self.G = Graph()
         self.G.initialize_full_graph(self.env, [GRID_RESOLUTION, GRID_RESOLUTION, np.pi/8])
 
+        # In case there is an environment with restricted configurations
+        self.env.restrict_configuration(self.G)
+
         # Creates a voxel structure that contains the vision space
         self.env.setup_default_vision(self.G)
 
@@ -32,12 +37,15 @@ class Vamp(Planner):
 
         # Structure used to save voxels that cannot be accessed by the robot, hence occupied
         self.occupied_voxels = dict()
+        self.debug = False
         self.v_0 = None
         self.R = None
-        self.complete = None
+        self.final_executed = []
+        self.object_poses = None
         self.current_q = None
+        self.vision_q = dict()
 
-    def get_plan(self, loadfile=None, **kwargs):
+    def get_plan(self, loadfile=None, debug=False, **kwargs):
         """
         Creates a plan and executes it based on the given planner and environment.
 
@@ -46,53 +54,57 @@ class Vamp(Planner):
         Returns:
             list: The plan followed by the robot from start to goal.
         """
-        q_start, q_goal = self.env.start, self.env.goal
+        self.debug = debug
+        self.current_q, q_goal = self.env.start, self.env.goal
         # Gets initial vision and updates the current vision based on it
-        self.v_0 = self.get_circular_vision(q_start)
+        self.v_0 = self.env.get_circular_vision(self.current_q, self.G)
         self.env.update_vision_from_voxels(self.v_0)
 
         # Gathers vision from the robot's starting position and updates the
         # visibility and occupancy grids. Visualize them for convenience.
         camera_pose, image_data = self.env.get_robot_vision()
-        self.env.update_visibility(camera_pose, image_data, q_start)
-        self.env.update_occupancy(q_start, image_data)
+        self.env.update_visibility(camera_pose, image_data, self.current_q)
+        self.env.update_occupancy(self.current_q, image_data)
+        self.env.update_movable_boxes(image_data)
         self.env.plot_grids(True, True, True)
 
-        self.complete = False
-        self.current_q = q_start
+
 
         # In case a loadfile is given. Load the state of the program to the specified one.
         if loadfile is not None:
-            self.load_state("saves/" + loadfile)
-
+            self.load_state(loadfile)
             self.env.plot_grids(True, True, True)
             set_joint_positions(self.env.robot, self.joints, self.current_q)
+            for i, obj in enumerate(self.env.room.movable_obstacles):
+                set_pose(obj, self.object_poses[i])
             print("State loaded")
-            wait_if_gui()
 
+
+        complete = False
         # Continue looking for a plan until the robot has reached the goal.
-        while not self.complete:
+        while not complete:
             path = self.vamp_backchain(self.current_q, q_goal, self.v_0)
             # If at any point there is no possible path, then the search is ended.
             if path is None:
-                print("Can't find path")
-                break
-            print("Found path:")
-            print(path)
+                return [key for key, _group in groupby(self.final_executed)]
 
             # Execute path until it fails due to obstruction, or it reaches the goal. Update the
             # visibility based on what was observed while traversing the path.
-            self.current_q, self.complete, gained_vision = self.execute_path(path)
+            self.current_q, complete, gained_vision, executed_path = self.execute_path(path)
+            self.final_executed += executed_path
             self.v_0.update(gained_vision)
 
-            # Ask for whether the user wants to save the current state to load it in the future.
-            print("Want to save this tate? Press Y or N then Enter")
-            x = input()
-            if x == "Y" or x == "y":
-                self.save_state()
+            if self.debug:
+                print("Want to save this state? Press Y or N then Enter")
+                x = input()
+                if x == "Y" or x == "y":
+                    self.object_poses = []
+                    for obj in self.env.room.movable_obstacles:
+                        self.object_poses.append(get_pose(obj))
+                    self.save_state()
 
-        print("Reached the goal")
-        wait_if_gui()
+        # Search for repeated nodes in a sequence and filter them.
+        return [key for key, _group in groupby(self.final_executed)]
 
     def vamp_backchain(self, q_start, q_goal, v_0):
         """
@@ -118,7 +130,9 @@ class Vamp(Planner):
             print("Couldn't find a direct path. Looking for a relaxed one")
             # If a path to goal can't be found, find a relaxed path and use it as a subgoal
             p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
-            p_vis = self.vavp(q, self.visibility_voxels_from_path(p_relaxed).difference(v), v)
+            if p_relaxed is None:
+                return None
+            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v)
             # If the relaxed version fails, explore some of the environment. And restart the search
             if p_vis is None:
                 print("P_VIS failed. Observing some of the environment")
@@ -153,7 +167,7 @@ class Vamp(Planner):
         obstructions_new = obstructions.union(R)
         p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new)
         if p_relaxed is not None:
-            p_vis = self.vavp(q, self.visibility_voxels_from_path(p_relaxed).difference(v), v, obstructions=obstructions_new)
+            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v, obstructions=obstructions_new)
             if p_vis is not None:
                 return p_vis
         return None
@@ -177,7 +191,7 @@ class Vamp(Planner):
         # Sample a goal position that views most of the space of interest.
         for i in range(number_of_samples):
             q_rand = self.G.rand_vex()
-            if not self.obstruction_from_path([q_rand], obstructions):
+            if not self.env.obstruction_from_path([q_rand], obstructions):
                 new_score = len(self.env.get_optimistic_vision(q_rand, self.G).intersection(R))
                 if new_score != 0:
                     if new_score > score:
@@ -269,9 +283,9 @@ class Vamp(Planner):
                 continue
             if relaxed:
                 # Check for whether the new node is in obstruction with any obstacle.
-                if not self.obstruction_from_path([q, q_prime], obstructions):
+                if not self.env.obstruction_from_path([q, q_prime], obstructions):
                     v_q = v_0.union(self.env.get_optimistic_vision(q, self.G))
-                    s_q = self.visibility_voxels_from_path([q, q_prime])
+                    s_q = self.env.visibility_voxels_from_path([q, q_prime])
                     # If the node follows the visibility constraint, add it normally.
                     if s_q.issubset(v_q):
                         actions.append((q_prime, distance(q, q_prime)))
@@ -282,9 +296,9 @@ class Vamp(Planner):
                         actions.append((q_prime, cost))
             else:
                 # In the not relaxed case only add nodes when the visibility constraint holds.
-                if not self.obstruction_from_path([q, q_prime], obstructions):
+                if not self.env.obstruction_from_path([q, q_prime], obstructions):
                     v_q = v_0.union(self.env.get_optimistic_vision(q, self.G))
-                    s_q = self.visibility_voxels_from_path([q, q_prime])
+                    s_q = self.env.visibility_voxels_from_path([q, q_prime])
                     if s_q.issubset(v_q):
                         actions.append((q_prime, distance(q, q_prime)))
         return actions
@@ -314,13 +328,15 @@ class Vamp(Planner):
                 continue
             if relaxed:
                 # Check for whether the new node is in obstruction with any obstacle.
-                if not self.obstruction_from_path([q, q_prime], obstructions):
+                collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions)
+
+                if not collisions.shape[0] > 0 and coll_objects is None:
                     if len(path) == 1:
                         v_q = v_0.union(self.env.get_optimistic_vision(q, self.G))
                     else:
                         v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G))
                     self.vision_q[q] = v_q
-                    s_q = self.visibility_voxels_from_path([q, q_prime])
+                    s_q = self.env.visibility_voxels_from_path([q, q_prime])
                     # If the node follows the visibility constraint, add it normally.
                     if s_q.issubset(v_q):
                         actions.append((q_prime, distance(q, q_prime)))
@@ -331,80 +347,18 @@ class Vamp(Planner):
                         actions.append((q_prime, cost))
             else:
                 # In the not relaxed case only add nodes when the visibility constraint holds.
-                if not self.obstruction_from_path([q, q_prime], obstructions):
+                collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], obstructions)
+
+                if not collisions.shape[0] > 0 and coll_objects is None:
                     if len(path) == 1:
                         v_q = v_0.union(self.env.get_optimistic_vision(q, self.G))
                     else:
                         v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G))
                     self.vision_q[q] = v_q
-                    s_q = self.visibility_voxels_from_path([q, q_prime])
+                    s_q = self.env.visibility_voxels_from_path([q, q_prime])
                     if s_q.issubset(v_q):
                         actions.append((q_prime, distance(q, q_prime)))
         return actions
-
-
-    def get_circular_vision(self, q, radius=1):
-        """
-        Gets a set of voxels that form a circle around a given point.
-
-        Args:
-            q (tuple): Center of the circle.
-            radius (float): Radius of the circle
-        Returns:
-            set: A set of voxels representing a circular area around the center with the given radius.
-        """
-        grid = self.env.static_vis_grid
-        surface_aabb = grid.aabb
-        voxels = set()
-        for voxel in grid.voxels_from_aabb(surface_aabb):
-            actual_q = (q[0], q[1], 0)
-            actual_vox = np.array(voxel) * np.array(self.G.res)
-            if distance(actual_vox, actual_q) <= radius:
-                voxels.add(voxel)
-        return voxels
-
-
-    def visibility_voxels_from_path(self, path):
-        """
-        Finds the set of voxels that correspond to the swept volume traversed by a path in the
-        visibility space.
-
-        Args:
-            path (list): The path traversed.
-        Returns:
-            set: A set of voxels occupied by the path.
-        """
-        voxels = set()
-        for q in path:
-            voxel = [x for x in self.env.static_vis_grid.voxels_from_aabb(self.env.aabb_from_q(q))
-                        if self.env.static_vis_grid.contains(x)]
-            voxels.update(voxel)
-        return voxels
-
-
-    def obstruction_from_path(self, path, obstruction):
-        """
-        Finds the set of voxels from the occupied space that a given path enters in contact with.
-
-        Args:
-            path (list): The path traversed.
-            obstruction (set): A set of voxels that represent additional occupied space taken from the
-                            visibility grid.
-        Returns:
-            set: A set of voxels occupied by the path.
-        """
-        voxels = set()
-        for q in path:
-            # Check for obstruction with the obstacles grid.
-            voxel = [x for x in self.env.occupancy_grid.voxels_from_aabb(self.env.aabb_from_q(q))
-                     if self.env.occupancy_grid.contains(x)]
-            voxels.update(voxel)
-
-            # Check for obstructions between the additional constraints and the visibility space
-            # traversed by the path.
-            voxel = obstruction.intersection(self.visibility_voxels_from_path([q]))
-            voxels.update(voxel)
-        return voxels
 
 
     def volume_from_voxels(self, grid, voxels):
@@ -440,7 +394,7 @@ class Vamp(Planner):
             list: The path from start to goal.
         """
         # Timing the search for benchmarking purposes.
-        current_t = time.clock_gettime_ns(0)
+        current_t = time.time()
         extended = set()
         paths = [([q_start], 0, 0)]
 
@@ -455,21 +409,26 @@ class Vamp(Planner):
 
             # If goal is found return it, graph the search, and output the elapsed time.
             if best_path[-1] == q_goal:
-                done = time.clock_gettime_ns(0) - current_t
-                print(done * (10 ** (-9)))
-                self.G.plot_search(self.env, extended, path=best_path)
+                done = time.time() - current_t
+                print("Extended nodes: {}".format(len(extended)))
+                print("Search Time: {}".format(done))
+                if self.debug:
+                    self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
                 return best_path
 
             extended.add(best_path[-1])
-            for action in action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions):
-                paths.append((best_path + [action[0]], best_path_cost+ action[1], H(action[0])))
+            actions = action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions)
+            for action in actions:
+                paths.append((best_path + [action[0]], best_path_cost + action[1], H(action[0])))
 
-            # Only sorting from heuristic. Faster but change if needed
+            # TODO: Only sorting from heuristic. Faster but change if needed
             paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
 
-        done = time.clock_gettime_ns(0) - current_t
-        print(done * (10 ** (-9)))
-        self.G.plot_search(self.env, extended)
+        done = time.time() - current_t
+        print("Extended nodes: {}".format(len(extended)))
+        print("Search Time: {}".format(done))
+        if self.debug:
+            self.G.plot_search(self.env, extended, goal=q_goal)
         return None
 
 
@@ -480,41 +439,48 @@ class Vamp(Planner):
         Args:
             path (list): The path to execute.
         Returns:
-            tuple: A tuple containing the state where execution stopped, whether it was able to reach the goal, and the gained vision.
+            tuple: A tuple containing the state where execution stopped, whether it was able to reach the goal,
+             the gained vision, and the executed path.
         """
         gained_vision = set()
+        executed = []
         for qi, q in enumerate(path):
             # Check whether the next step goes into area that is unseen.
-            next_occupied = self.visibility_voxels_from_path([q])
+            next_occupied = self.env.visibility_voxels_from_path([q])
             for voxel in next_occupied:
                 if self.env.visibility_grid.contains(voxel):
                     qi = qi-1 if qi-1 >= 0 else 0
                     print("Stepping into unseen area. Aborting")
-                    return path[qi], False, gained_vision
-            set_joint_positions(self.env.robot, self.joints, q)
+                    return path[qi], False, gained_vision, executed
+
+            self.env.move_robot(q, self.joints)
+            # Executed paths saved as a list of q and attachment.
+            executed.append([q, None])
 
             # Get updated occupancy grid at each step
             camera_pose, image_data = self.env.get_robot_vision()
             self.env.update_occupancy(q, image_data)
-            self.env.update_movable_boxes(image_data)
+            gained_vision.update(self.env.update_movable_boxes(image_data))
             gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
 
             # Check if remaining path is collision free under the new occupancy grid
-            if len(self.obstruction_from_path(path[qi:], set())) != 0:
+            obstructions, collided_obj = self.env.obstruction_from_path(path[qi:], set())
+            if obstructions.shape[0] > 0 or collided_obj is not None:
                 print("Found a collision on this path. Aborting")
                 self.env.plot_grids(visibility=True, occupancy=True, movable=True)
-                return q, False, gained_vision
+                return q, False, gained_vision, executed
             self.env.plot_grids(visibility=True, occupancy=True, movable=True)
-        return q, True, gained_vision
-
+        return q, True, gained_vision, executed
 
     def save_state(self):
         """
         Saves the current state of the Vamp planning algorithm.
         """
         current_time = datetime.datetime.now()
-        dbfile = open("saves/state_{}_{}_{}_{}_{}.dat".format(current_time.month, current_time.day, current_time.hour,
-                                           current_time.minute, current_time.second), "wb")
+        dbfile = open("saves/{}_state_{}_{}_{}_{}_{}_{}.dat".format(self.env.__class__.__name__,
+                                                                    self.__class__.__name__, current_time.month,
+                                                                    current_time.day, current_time.hour,
+                                                                    current_time.minute, current_time.second), "wb")
         pickle.dump(self, dbfile)
         dbfile.close()
 
@@ -533,9 +499,10 @@ class Vamp(Planner):
         self.occupied_voxels = copy.occupied_voxels
         self.v_0 = copy.v_0
         self.R = copy.R
-        self.complete = copy.complete
         self.current_q = copy.current_q
-
+        self.vision_q = copy.vision_q
+        self.final_executed = copy.final_executed
+        self.object_poses = copy.object_poses
         dbfile.close()
 
 
@@ -550,10 +517,10 @@ def distance(vex1, vex2):
     Returns:
         float: The Euclidean distance between both tuples.
     """
-    R = 0.01
+    r = 0.01
     dist = 0
     for i in range(len(vex1)-1):
         dist += (vex1[i] - vex2[i])**2
-    dist += (R*find_min_angle(vex1[2], vex2[2]))**2
+    dist += (r*find_min_angle(vex1[2], vex2[2]))**2
     return dist**0.5
 

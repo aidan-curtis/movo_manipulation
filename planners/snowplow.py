@@ -77,6 +77,8 @@ class Snowplow(Planner):
             self.current_q, complete, gained_vision, executed_path = self.execute_path(path)
             self.final_executed += executed_path
             self.v_0.update(gained_vision)
+
+
             if self.debug:
                 print("Want to save this state? Press Y or N then Enter")
                 x = input()
@@ -297,7 +299,7 @@ class Snowplow(Planner):
                 if self.env.visibility_grid.contains(voxel):
                     qi = qi - 1 if qi - 1 >= 0 else 0
                     print("Stepping into unseen area. Aborting")
-                    return path[qi], False, gained_vision, None
+                    return path[qi][0], False, gained_vision, executed
 
 
             self.env.move_robot(q, self.joints, attachment=attachment)
@@ -316,7 +318,6 @@ class Snowplow(Planner):
                 self.env.clear_noise_from_attached(q, attachment)
 
             # Check if remaining path is collision free under the new occupancy grid
-            # TODO only checking for obstruction in the next step. Think about changing
             #obstructions, collided_obj = self.env.obstruction_from_path(path_filtered[qi:qi+2], set(), attachment=attachment)
             obstructions, collided_obj = self.find_obstruction_ahead(path[qi:], attachment)
             if obstructions.shape[0] > 0 or collided_obj is not None:
