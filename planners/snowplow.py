@@ -118,15 +118,18 @@ class Snowplow(Planner):
         p_through_voxels = self.env.visibility_voxels_from_path(p_through)
 
         for attach_pose in attachment_poses:
+            v = set(v_0)
             p_attach = self.a_star(q_start, attach_pose, v_0)
             if p_attach is None:
                 continue
 
+            v.update(self.env.get_optimistic_path_vision(p_attach, self.G))
             print("Ready to plan placement")
             self.env.remove_movable_object(obj_obstruction)
             max_samplings = 5
             i = 0
             while True:
+                v_p = set(v)
                 i += 1
                 if i > max_samplings:
                     print("Max number of placement samples reached")
@@ -138,15 +141,16 @@ class Snowplow(Planner):
                     print("Can't find placement. Retrying attachment")
                     self.env.movable_boxes.append(obj_obstruction)
                     break
-                p_place = self.a_star(attach_pose, q_place, v_0, attachment=[obj_obstruction, grasp, obj])
+                p_place = self.a_star(attach_pose, q_place, v_p, attachment=[obj_obstruction, grasp, obj])
                 if p_place is None:
                     print("Can't find path to placement. Finding different placement")
                     continue
+                v_p.update(self.env.get_optimistic_path_vision(p_place, self.G, attachment=[obj_obstruction, grasp, obj]))
 
                 # After the clearing is done. Then find a path to the goal
                 obj_oobb_placed = self.env.movable_object_oobb_from_q(obj_obstruction, p_place[-1], grasp)
                 self.env.movable_boxes.append(obj_oobb_placed)
-                p_goal = self.a_star(p_place[-1], q_goal, v_0)
+                p_goal = self.a_star(p_place[-1], q_goal, v_p)
                 self.env.remove_movable_object(obj_oobb_placed)
                 if p_goal is None:
                     print("Can't find path to goal after placement. Finding different placement")
@@ -246,8 +250,8 @@ class Snowplow(Planner):
             for action in actions:
                 paths.append((best_path + [action[0]], best_path_cost + action[1], distance(action[0], q_goal)))
 
-            # Only sorting from heuristic. Faster but change if needed
-            paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
+            # TODO: Only sorting from heuristic. Faster but change if needed
+            paths = sorted(paths, key=lambda x: x[-1], reverse=True)
 
         done = time.time() - current_t
         print("Extended nodes: {}".format(len(extended)))

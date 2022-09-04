@@ -89,7 +89,7 @@ class Environment(ABC):
         # TODO change how intersections with walls are found, right now it
         # finds collisions easily because of how we check the collisions with the voxels
         for wall in self.room.walls:
-            for voxel in self.occupancy_grid.voxels_from_aabb(get_aabb(wall)):
+            for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(get_aabb(wall), 0.98)):
                 self.occupancy_grid.set_occupied(voxel)
 
         for q, attachment in plan:
@@ -450,13 +450,14 @@ class Environment(ABC):
         # Look for the corresponding default vision and transform the voxels accordingly.
         default_one = self.default_vision[(0, 0, round(q[2], 3))]
         resulting_voxels = set()
-        for voxel in default_one:
-            voxel_w = np.array(voxel)*np.array(G.res)
-            new_voxel_w = voxel_w + np.array([q[0], q[1], GRID_RESOLUTION])
-            new_voxel = np.rint(np.array(new_voxel_w)/np.array(G.res))
-            new_voxel = (new_voxel[0], new_voxel[1], 0)
-            if self.static_vis_grid.contains(new_voxel):
-                resulting_voxels.add(new_voxel)
+        default_vision = np.array(list(default_one)) + (
+                np.array([q[0], q[1], GRID_RESOLUTION]) / np.array(G.res) * np.array([1, 1, 0]))
+
+        for new_voxel in default_vision:
+            # new_voxel = np.array(voxel)+(np.array([q[0], q[1], GRID_RESOLUTION])/np.array(G.res)*np.array([1,1,0]))*
+            # new_voxel = (new_voxel[0], new_voxel[1], 0)
+            if self.static_vis_grid.contains(tuple(new_voxel)):
+                resulting_voxels.add(tuple(new_voxel))
 
         # If an object is attached, compute set of voxels that could occlude vision.
         extra_obs = set()
