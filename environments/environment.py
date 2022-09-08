@@ -211,7 +211,13 @@ class Environment(ABC):
                         break
                 if merging:
                     break
-        all_new_boxes = [all_new_boxes[i] for i in indexes]
+        final_voxes = [all_new_boxes[i] for i in indexes]
+
+        all_new_boxes = []
+        # Remove aabbs that are very very small, caused by outliers
+        for box in final_voxes:
+            if get_aabb_volume(box.aabb) >= 0.01:
+                all_new_boxes.append(box)
 
         # Remove points from occupancy/visibility grids
         vision_update = set()
@@ -442,6 +448,11 @@ class Environment(ABC):
         Returns:
             set: A set of voxels that correspond to the gained vision.
         """
+        # In the case we have a path formatted as (q, attachment)
+        if len(q) == 2:
+            attachment = q[1]
+            q = q[0]
+
         # If we have already reached the configuration, return the obtained vision.
         # Only if no object is attached.
         if q in self.gained_vision and attachment is None:
@@ -578,7 +589,7 @@ class Environment(ABC):
 
         return ListOfPoints, False
 
-    def find_path_movable_obstruction(self, path):
+    def find_path_movable_obstruction(self, path, attachment=None):
         """
         Find the first movable object bounding box that this path collides with.
 
@@ -592,14 +603,26 @@ class Environment(ABC):
         for q in path:
             aabb = self.aabb_from_q(q)
             for movable_box in self.movable_boxes:
+                if attachment is not None:
+                    if aabb_overlap(movable_box.aabb, attachment[0].aabb):
+                        continue
+
                 intersec = aabb_intersection(aabb, movable_box.aabb)
                 if intersec is not None:
                     volume = get_aabb_volume(intersec)
                     if volume > best_volume:
                         best_volume = volume
                         best_obj = movable_box
+                if attachment is not None:
+                    intersec = aabb_intersection(self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb,
+                                                 movable_box.aabb)
+                    if intersec is not None:
+                        volume = get_aabb_volume(intersec)
+                        if volume > best_volume:
+                            best_volume = volume
+                            best_obj = movable_box
         return best_obj
-    def sample_attachment_push(self, obj, G, obstructions=set()):
+    def sample_attachment_push(self, aabb, G, obstructions=set(), enforced_obstacles=[]):
         """
         Helper function to sample an attachment position for the case that the object can
         only be pushed.
@@ -610,7 +633,6 @@ class Environment(ABC):
         Returns:
             A set of poses that are valid attachments
         """
-        aabb = get_aabb(obj)
         mid_point = (np.array(aabb.lower) + np.array(aabb.upper)) / 2
 
         attachments = [[round(mid_point[0], 1), aabb.lower[1], round(np.pi / 2, 3)],
@@ -642,13 +664,14 @@ class Environment(ABC):
 
         positions = set()
         for pos in attachments:
-            obst, coll = self.obstruction_from_path([tuple(pos)], obstructions)
-            if len(obst) == 0 and coll is None:
+            obst, coll = self.obstruction_from_path([tuple(pos)], obstructions, ignore_movable=True,
+                                                    enforced_obstacles=enforced_obstacles)
+            if obst.shape[0] <= 0 and coll is None:
                 positions.add(tuple(pos))
         return positions
 
 
-    def sample_attachment_poses(self, movable_object, G, radius=1, obstructions=set()):
+    def sample_attachment_poses(self, movable_object, G, radius=1, obstructions=set(), enforced_obstacles=[]):
         """
         Given an object to move, sample valid poses around it for a successful attachment
 
@@ -667,7 +690,7 @@ class Environment(ABC):
 
         # TODO: Only sampling as if push, just to make the process of moving easier. Change later if needed
         if obj in self.push_only or True:
-            return self.sample_attachment_push(obj, G, obstructions=obstructions)
+            return self.sample_attachment_push(movable_object.aabb, G, obstructions=obstructions, enforced_obstacles=enforced_obstacles)
 
         # If the object can be moved freely, then sample attachments
         mid_point = ((movable_object.aabb[0][0] + movable_object.aabb[1][0]) / 2,
@@ -690,9 +713,10 @@ class Environment(ABC):
                     if q in candidates:
                         continue
                     queue.append(q)
-                    obst, coll = self.obstruction_from_path([q], obstructions)
+                    obst, coll = self.obstruction_from_path([q], obstructions, enforced_obstacles=enforced_obstacles,
+                                                            ignore_movable=True)
                     if aabb_overlap(scale_aabb(movable_object.aabb, 1.1), self.aabb_from_q(q)) or\
-                            len(obst) != 0 or coll is not None:
+                            obst.shape[0] > 0 or coll is not None:
                         continue
                     angle = np.arctan2(mid_point[1] - q[1], mid_point[0]-q[0])
                     if abs(find_min_angle(angle, q[2])) < np.pi/18:
@@ -702,13 +726,13 @@ class Environment(ABC):
                         candidates.add(q)
         return candidates
 
-    def get_movable_box_from_obj(self, obj):
+    def get_movable_box_from_aabb(self, aabb):
         for movable_box in self.movable_boxes:
-            if aabb_contains_point(get_aabb_center(movable_box.aabb), get_aabb(obj)):
+            if aabb_overlap(movable_box.aabb, aabb):
                 return movable_box
 
 
-    def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set()):
+    def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set(), enforced_obstacles=[]):
         """
         Samples a placement position for an object such that it does not collide with a given path
 
@@ -728,7 +752,8 @@ class Environment(ABC):
         # If the object can only be pushed then restrict its possible placements
         if obj in self.push_only:
             return self.sample_push_placement(q_start, coll_obj, G, p_through, obj,
-                                              obstructions=obstructions)
+                                              obstructions=obstructions,
+                                              enforced_obstacles=enforced_obstacles)
 
         # Compute the grasp transform of the attachment.
         base_pose = Pose(
@@ -745,11 +770,13 @@ class Environment(ABC):
             if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
             obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
-                                                    attachment=[coll_obj, base_grasp])
-            if len(obst) == 0 and coll is None:
+                                                    attachment=[coll_obj, base_grasp], ignore_movable=True,
+                                                    enforced_obstacles=enforced_obstacles)
+            if obst.shape[0] <= 0 and coll is None:
                 return rand_q, base_grasp, obj
+        return None, None, None
 
-    def sample_push_placement(self, q_start, coll_obj, G, p_through, obj, obstructions=set()):
+    def sample_push_placement(self, q_start, coll_obj, G, p_through, obj, obstructions=set(), enforced_obstacles=[]):
         """
         Helper function for finding a placement position for an object that can only be pushed
 
@@ -791,8 +818,9 @@ class Environment(ABC):
             if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
             obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
-                                                    attachment=[coll_obj, base_grasp])
-            if len(obst) == 0 and coll is None:
+                                                    attachment=[coll_obj, base_grasp], ignore_movable=True,
+                                                    enforced_obstacles=enforced_obstacles)
+            if obst.shape[0] <= 0 and coll is None:
                 return rand_q, base_grasp, obj
         return None, None, None
 
@@ -980,7 +1008,8 @@ class Environment(ABC):
         return visibility_points
 
 
-    def obstruction_from_path(self, path, obstruction, ignore_movable=False, attachment=None):
+    def obstruction_from_path(self, path, obstruction, ignore_movable=False, attachment=None,
+                              enforced_obstacles=[]):
         """
         Finds the set of voxels from the occupied space that a given path enters in contact with.
 
@@ -993,7 +1022,6 @@ class Environment(ABC):
         Returns:
             A set of voxels occupied by the path and the first movable object the path collides with.
         """
-        occ_points = np.array(self.occupancy_grid.occupied_points)
         occ_points_from_obs = np.array([list(self.occupancy_grid.center_from_voxel(vox))
                                         for vox in obstruction])
         occupancy_points = None
@@ -1012,8 +1040,8 @@ class Environment(ABC):
                 # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
                 occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
             if len(obstruction) > 0:
-                vis_idx_from_obs = np.all( (aabb.lower <= occ_points_from_obs) &
-                                           (occ_points_from_obs <= aabb.upper), axis=1)
+                vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
+                                          (occ_points_from_obs <= aabb.upper), axis=1)
                 occupancy_points = np.concatenate([occupancy_points,
                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
@@ -1037,8 +1065,28 @@ class Environment(ABC):
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:
+                aabb = self.aabb_from_q(q)
+                if attachment is not None:
+                    obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
                 for movable_box in self.movable_boxes:
                     if aabb_overlap(movable_box.aabb, aabb):
+                        movable_coll = movable_box
+                        break
+                    if attachment is not None:
+                        if aabb_overlap(movable_box.aabb, obj_aabb):
+                            movable_coll = movable_box
+                            break
+
+            # Check for collisions with enforced objects even if ignoring movables
+            aabb = self.aabb_from_q(q)
+            if attachment is not None:
+                obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
+            for movable_box in enforced_obstacles:
+                if aabb_overlap(movable_box.aabb, aabb):
+                    movable_coll = movable_box
+                    break
+                if attachment is not None:
+                    if aabb_overlap(movable_box.aabb, obj_aabb):
                         movable_coll = movable_box
                         break
 

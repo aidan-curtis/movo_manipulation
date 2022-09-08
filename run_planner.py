@@ -1,5 +1,5 @@
 import argparse
-from pybullet_planning.pybullet_tools.utils import wait_if_gui, draw_aabb, get_aabb, scale_aabb
+from pybullet_planning.pybullet_tools.utils import wait_if_gui, draw_aabb
 from planners.snowplow import Snowplow
 from planners.a_star_search import AStarSearch
 from planners.rrt import RRT

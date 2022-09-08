@@ -299,7 +299,7 @@ class Graph:
 
 
 
-    def plot_search(self, env, extended, path=None, R=set(), goal=None):
+    def plot_search(self, env, extended, path=None, R=set(), goal=None, enforced_obstacles=[]):
         """
         Visualizes the finished search by visualizing all the nodes it extended.
 
@@ -332,6 +332,15 @@ class Graph:
                                    aabb.upper[0] - aabb.lower[0],
                                    aabb.upper[1] - aabb.lower[1],
                                    color=color, linewidth=0.1))
+
+        for obstacle in enforced_obstacles:
+            color = "blue"
+            aabb = obstacle.aabb
+            ax.add_patch(Rectangle((aabb.lower[0], aabb.lower[1]),
+                                   aabb.upper[0] - aabb.lower[0],
+                                   aabb.upper[1] - aabb.lower[1],
+                                   color=color, linewidth=0.1))
+
 
         # Scatters all the points extended by the search.
         px = [x for x, y, t in extended]
