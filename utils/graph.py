@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 from matplotlib import collections  as mc
 from matplotlib.patches import Rectangle, Arrow
 import numpy as np
+from numpy.random import default_rng
+
 from pybullet_planning.pybullet_tools.utils import get_aabb, wait_if_gui
 #from environments.environment import GRID_RESOLUTION
 
@@ -156,7 +158,7 @@ class Graph:
             if i < (n_vertices - (self.t_step * self.y_step)):
                 self.add_edge(i, i + self.y_step*self.t_step)
 
-    def rand_vex(self, env):
+    def rand_vex(self, env, samples=1):
         """
         Selects a random vertex from the graph.
 
@@ -166,15 +168,19 @@ class Graph:
             tuple: a vertex of the graph.
 
         """
-        while True:
-            i = np.random.randint(len(self.vertices))
+        rng = default_rng()
+        indexes = rng.choice(len(self.vertices), size=samples, replace=False)
+        vertices = []
+        for i in indexes:
+            #i = np.random.randint(len(self.vertices))
             # Restrict the random points to be on the floors' bounds to improve sampling in
             # non-rectangular rooms
             for floor in env.room.floors:
                 aabb = get_aabb(floor)
                 if (np.all([l1 <= l2 for l1, l2 in zip(aabb.lower[:2], self.vertices[i][:2])]) &
                     np.all([l2 <= l1 for l1, l2 in zip(aabb.upper[:2], self.vertices[i][:2])])):
-                    return self.vertices[i]
+                    vertices.append(self.vertices[i])
+        return vertices
 
 
     def plot(self, env, path=None):

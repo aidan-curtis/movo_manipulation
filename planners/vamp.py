@@ -2,7 +2,8 @@ from itertools import groupby
 
 from planners.planner import Planner
 from pybullet_planning.pybullet_tools.utils import (wait_if_gui, set_joint_positions,
-                                                    joint_from_name, get_aabb_volume, set_pose, get_pose)
+                                                    joint_from_name, get_aabb_volume, set_pose, get_pose, scale_aabb,
+                                                    get_aabb)
 import numpy as np
 import time
 import datetime
@@ -132,6 +133,7 @@ class Vamp(Planner):
             p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
             if p_relaxed is None:
                 return None
+            print("Looking for path to subgoal")
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v)
             # If the relaxed version fails, explore some of the environment. And restart the search
             if p_vis is None:
@@ -158,21 +160,57 @@ class Vamp(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
+        # Find a goal for tourist to use
+        q_goal = None
+        while q_goal is None:
+            current_t = time.time()
+            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
+            done = time.time() - current_t
+            print(done)
+        print("Subgoal found")
+
         # Try visualizing the area of interest keeping the vision constraint.
-        p_vis = self.tourist(q, R, v)
+        p_vis = self.tourist(q, R, v, q_goal=q_goal)
         if p_vis is not None:
             return p_vis
         # If can't view the area, find a relaxed path that does the same and make this new path
         # the new subgoal. Call the function recursively.
         obstructions_new = obstructions.union(R)
-        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new)
+        p_relaxed = self.tourist(q, R, v, q_goal=q_goal, relaxed=True, obstructions=obstructions_new)
         if p_relaxed is not None:
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v, obstructions=obstructions_new)
             if p_vis is not None:
                 return p_vis
         return None
 
-    def tourist(self, q_start, R, v_0, relaxed=False, obstructions=set()):
+    def sample_goal_from_required(self, R, obstructions=set()):
+        """
+        Samples a goal position that views most of the required region
+
+        Args:
+            R (set) : Set of voxels that define the area we are interested in gaining vision from.
+            obstructions (set): Set of tuples that define the space that the robot can't occupy.
+            ignore_movable (bool): Whether to ignore collisions with movable objects or not.
+        Returns:
+            A configuration where the robot sees most of the space, from a set of random configurations.
+        """
+        q_goal = None
+        score = 0
+        number_of_samples = 1000
+        # Sample a goal position that views most of the space of interest.
+        rand_qs = self.G.rand_vex(self.env, samples=number_of_samples)
+        for q_rand in rand_qs:
+            # Check collisions with obstacle and movable objects if required
+            collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
+            if not collisions.shape[0] > 0 and coll_objects is None:
+                new_score = len(self.env.get_optimistic_vision(q_rand, self.G, obstructions=obstructions).intersection(R))
+                if new_score != 0:
+                    if new_score > score:
+                        q_goal = q_rand
+                        score = new_score
+        return q_goal
+
+    def tourist(self, q_start, R, v_0, q_goal=None, relaxed=False, obstructions=set()):
         """
         Procedure used to find a path that partially or completely views some area of interest.
 
@@ -185,18 +223,9 @@ class Vamp(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
-        q_goal = None
-        score = 0
-        number_of_samples = 1000
-        # Sample a goal position that views most of the space of interest.
-        for i in range(number_of_samples):
-            q_rand = self.G.rand_vex()
-            if not self.env.obstruction_from_path([q_rand], obstructions):
-                new_score = len(self.env.get_optimistic_vision(q_rand, self.G).intersection(R))
-                if new_score != 0:
-                    if new_score > score:
-                        q_goal = q_rand
-                        score = new_score
+        while q_goal is None:
+            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
+        print("Subgoal found")
 
         # Defines a heuristic function to use on the A* star search. Currently using the distance to goal.
         def heuristic_fn(q):
@@ -393,43 +422,46 @@ class Vamp(Planner):
         Returns:
             list: The path from start to goal.
         """
-        # Timing the search for benchmarking purposes.
-        current_t = time.time()
-        extended = set()
-        paths = [([q_start], 0, 0)]
+        try:
+            # Timing the search for benchmarking purposes.
+            current_t = time.time()
+            extended = set()
+            paths = [([q_start], 0, 0)]
 
-        while paths:
-            current = paths.pop(-1)
-            best_path = current[0]
-            best_path_cost = current[1]
+            while paths:
+                current = paths.pop(-1)
+                best_path = current[0]
+                best_path_cost = current[1]
 
-            # Ignore a node that has already been extended.
-            if best_path[-1] in extended:
-                continue
+                # Ignore a node that has already been extended.
+                if best_path[-1] in extended:
+                    continue
 
-            # If goal is found return it, graph the search, and output the elapsed time.
-            if best_path[-1] == q_goal:
-                done = time.time() - current_t
-                print("Extended nodes: {}".format(len(extended)))
-                print("Search Time: {}".format(done))
-                if self.debug:
-                    self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
-                return best_path
+                # If goal is found return it, graph the search, and output the elapsed time.
+                if best_path[-1] == q_goal:
+                    done = time.time() - current_t
+                    print("Extended nodes: {}".format(len(extended)))
+                    print("Search Time: {}".format(done))
+                    if self.debug:
+                        self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
+                    return best_path
 
-            extended.add(best_path[-1])
-            actions = action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions)
-            for action in actions:
-                paths.append((best_path + [action[0]], best_path_cost + action[1], H(action[0])))
+                extended.add(best_path[-1])
+                actions = action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions)
+                for action in actions:
+                    paths.append((best_path + [action[0]], best_path_cost + action[1], H(action[0])))
 
-            # TODO: Only sorting from heuristic. Faster but change if needed
-            paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
+                # TODO: Only sorting from heuristic. Faster but change if needed
+                paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
 
-        done = time.time() - current_t
-        print("Extended nodes: {}".format(len(extended)))
-        print("Search Time: {}".format(done))
-        if self.debug:
-            self.G.plot_search(self.env, extended, goal=q_goal)
-        return None
+            done = time.time() - current_t
+            print("Extended nodes: {}".format(len(extended)))
+            print("Search Time: {}".format(done))
+            if self.debug:
+                self.G.plot_search(self.env, extended, goal=q_goal)
+            return None
+        except KeyboardInterrupt:
+            return None
 
 
     def execute_path(self, path):

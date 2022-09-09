@@ -1154,7 +1154,7 @@ class Environment(ABC):
         """
         MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
         MOVO_PATH = os.path.abspath(MOVO_URDF)
-        robot_body = load_pybullet(MOVO_PATH, fixed_base=True)
+        robot_body = load_pybullet(MOVO_PATH, fixed_base=True, scale=1.1)
 
         self.set_defaults(robot_body)
 

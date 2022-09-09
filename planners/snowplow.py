@@ -257,7 +257,7 @@ class Snowplow(Planner):
                 paths.append((best_path + [action[0]], best_path_cost + action[1], distance(action[0], q_goal)))
 
             # TODO: Only sorting from heuristic. Faster but change if needed
-            paths = sorted(paths, key=lambda x: x[-1], reverse=True)
+            paths = sorted(paths, key=lambda x: x[-1] + x[-2], reverse=True)
 
         done = time.time() - current_t
         print("Extended nodes: {}".format(len(extended)))

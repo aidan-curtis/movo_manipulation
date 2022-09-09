@@ -14,7 +14,7 @@ import pickle
 from utils.graph import Graph
 from environments.environment import GRID_RESOLUTION, find_min_angle
 
-USE_COST = False
+USE_COST = True
 
 
 class Lamb(Planner):
@@ -183,11 +183,13 @@ class Lamb(Planner):
                 q = p_move[-1][0]
                 continue
             new_obs = set(obstructions)
+            new_enf = list(enforced_obstacles)
             if attachment is not None:
                 new_obs.update(obstructions.union(self.env.occupancy_grid.voxels_from_aabb(attachment[0].aabb)))
-                new_enf = enforced_obstacles + [attachment[0]]
+                new_enf += [attachment[0]]
             p_relaxed_voxels = self.env.visibility_voxels_from_path(p_relaxed, attachment=attachment)
 
+            print("Planning to view a subgoal")
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed, attachment=attachment).difference(v), v,
                               obstructions=new_obs, enforced_obstacles=new_enf,
                               wrong_placements=wrong_placements.union(p_relaxed_voxels))
@@ -202,6 +204,7 @@ class Lamb(Planner):
                 print("P_VIS failed again. Aborting")
                 return None
 
+            print("Planning to subgoal succeeded. Replanning final path")
             # Return to the starting configuration if we were moving an object
             if attachment is not None:
                 p_return = self.a_star(p_vis[-1][0], q_start, v.union(self.env.get_optimistic_path_vision(p_vis, self.G)),
@@ -309,15 +312,20 @@ class Lamb(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
+        q_goal = None
+        while q_goal is None:
+            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
+        print("Subgoal found")
+
         # Try visualizing the area of interest keeping the vision constraint.
-        p_vis = self.tourist(q, R, v, obstructions=obstructions, enforced_obstacles=enforced_obstacles,
+        p_vis = self.tourist(q, R, v, q_goal=q_goal, obstructions=obstructions, enforced_obstacles=enforced_obstacles,
                              wrong_placements=wrong_placements)
         if p_vis is not None:
             return p_vis
         # If it can't view the area, find a relaxed path that does the same and make this new path
         # the new subgoal. Call the function recursively.
         obstructions_new = obstructions.union(R)
-        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new,
+        p_relaxed = self.tourist(q, R, v, q_goal=q_goal, relaxed=True, obstructions=obstructions_new,
                                  enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
         if p_relaxed is not None:
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v,
@@ -342,8 +350,8 @@ class Lamb(Planner):
         score = 0
         number_of_samples = 1000
         # Sample a goal position that views most of the space of interest.
-        for i in range(number_of_samples):
-            q_rand = self.G.rand_vex(self.env)
+        rand_qs = self.G.rand_vex(self.env, samples=number_of_samples)
+        for q_rand in rand_qs:
             # Check collisions with obstacle and movable objects if required
             collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
             if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
@@ -354,7 +362,7 @@ class Lamb(Planner):
                         score = new_score
         return q_goal
 
-    def tourist(self, q_start, R, v_0, relaxed=False, obstructions=set(), ignore_movable=False, enforced_obstacles=[],
+    def tourist(self, q_start, R, v_0, q_goal=None, relaxed=False, obstructions=set(), ignore_movable=False, enforced_obstacles=[],
                 wrong_placements=set()):
         """
         Procedure used to find a path that partially or completely views some area of interest.
@@ -369,11 +377,13 @@ class Lamb(Planner):
         Returns:
             list: The suggested path that views some area of interest.
         """
-        q_goal = self.sample_goal_from_required(R, ignore_movable=ignore_movable,
-                                                obstructions=obstructions)
+        while q_goal is None:
+            q_goal = self.sample_goal_from_required(R, ignore_movable=ignore_movable,
+                                                    obstructions=obstructions)
+        print("Subgoal found")
 
         return self.lamb(q_start, q_goal, v_0, obstructions=obstructions,
-                           enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
+                         enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
 
     def action_fn(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
                        ignore_movable=False, attachment=None, enforced_obstacles=[]):
