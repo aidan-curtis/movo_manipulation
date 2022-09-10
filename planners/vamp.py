@@ -134,18 +134,34 @@ class Vamp(Planner):
             if p_relaxed is None:
                 return None
             print("Looking for path to subgoal")
-            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v)
-            # If the relaxed version fails, explore some of the environment. And restart the search
-            if p_vis is None:
-                print("P_VIS failed. Observing some of the environment")
-                W = set(self.env.static_vis_grid.value_from_voxel.keys())
-                p_vis = self.tourist(q, W.difference(v), v)
-            if p_vis is None:
-                print("P_VIS failed again. Aborting")
-                return None
-            p += p_vis
-            v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
-            q = p_vis[-1]
+            # Continue until either we see all the required area or the relaxed path does not
+            # exist. This uses the assumption that we can see every voxel from some configuration
+            required_viewing = self.env.visibility_voxels_from_path(p_relaxed).difference(v)
+            while len(required_viewing) > 0:
+                p_vis = self.vavp(q, required_viewing, v)
+                # If the relaxed version fails, explore some of the environment. And restart the search
+                if p_vis is None:
+                    print("P_VIS failed. Observing some of the environment")
+                    W = set(self.env.static_vis_grid.value_from_voxel.keys())
+                    p_vis = self.tourist(q, W.difference(v), v)
+                if p_vis is None:
+                    print("P_VIS failed again. Aborting")
+                    return None
+                p += p_vis
+                v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
+                q = p_vis[-1]
+
+                # Check if we made progress seen the area, if we did, then don't change the p_relaxed
+                # Otherwise, find a new p_relaxed
+                required_viewing_check = self.env.visibility_voxels_from_path(p_relaxed).difference(v)
+                if len(required_viewing) != len(required_viewing_check):
+                    required_viewing = required_viewing_check
+                else:
+                    p_relaxed = self.vamp_path_vis(q, q_goal, v, relaxed=True)
+                    if p_relaxed is None:
+                        break
+                    required_viewing = self.env.visibility_voxels_from_path(p_relaxed).difference(v)
+
 
     def vavp(self, q, R, v, obstructions=set()):
         """
@@ -160,23 +176,14 @@ class Vamp(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
-        # Find a goal for tourist to use
-        q_goal = None
-        while q_goal is None:
-            current_t = time.time()
-            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
-            done = time.time() - current_t
-            print(done)
-        print("Subgoal found")
-
         # Try visualizing the area of interest keeping the vision constraint.
-        p_vis = self.tourist(q, R, v, q_goal=q_goal)
+        p_vis = self.tourist(q, R, v)
         if p_vis is not None:
             return p_vis
         # If can't view the area, find a relaxed path that does the same and make this new path
         # the new subgoal. Call the function recursively.
         obstructions_new = obstructions.union(R)
-        p_relaxed = self.tourist(q, R, v, q_goal=q_goal, relaxed=True, obstructions=obstructions_new)
+        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new)
         if p_relaxed is not None:
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v, obstructions=obstructions_new)
             if p_vis is not None:
@@ -223,26 +230,21 @@ class Vamp(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
-        while q_goal is None:
-            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
-        print("Subgoal found")
-
         # Defines a heuristic function to use on the A* star search. Currently using the distance to goal.
         def heuristic_fn(q):
-            return distance(q, q_goal)
-
             # Previously used code that defines the heuristic as the smallest distance from the vision
             # gained in the configuration to the area of interest.
             vision_q = self.env.get_optimistic_vision(q, self.G)
             if len(R.intersection(vision_q)) != 0:
                 return 0
             if len(vision_q) == 0:
-                return np.inf
+                return (self.env.room.aabb.upper[0] - self.env.room.aabb.lower[0])/2
             s1 = np.array(list(vision_q))
             s2 = np.array(list(R))
             return scipy.spatial.distance.cdist(s1, s2).min()*GRID_RESOLUTION
 
-        return self.vamp_path_vis(q_start, q_goal, v_0, H=heuristic_fn, relaxed=relaxed, obstructions=obstructions)
+        return self.vamp_path_vis(q_start, q_goal, v_0, H=heuristic_fn, relaxed=relaxed, obstructions=obstructions,
+                                  from_required=True)
 
 
     def vamp_step_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set()):
@@ -266,7 +268,7 @@ class Vamp(Planner):
         return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_step, obstructions=obstructions)
 
 
-    def vamp_path_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set()):
+    def vamp_path_vis(self, q_start, q_goal, v_0, H=0, relaxed=False, obstructions=set(), from_required=False):
         """
         Helper function to initialize the search. Uses the vision constraint on each node based
         on the vision gained from the first path found to the node.
@@ -285,7 +287,8 @@ class Vamp(Planner):
             H = lambda x: distance(x, q_goal)
         self.vision_q = dict()
 
-        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_path, obstructions=obstructions)
+        return self.a_star(q_start, q_goal, v_0, H, relaxed, self.action_fn_path, obstructions=obstructions,
+                           from_required=from_required)
 
     def action_fn_step(self, path, v_0, relaxed=False, extended=set(), obstructions=set()):
         """
@@ -371,8 +374,9 @@ class Vamp(Planner):
                         actions.append((q_prime, distance(q, q_prime)))
                     # If it does not follow the visibility constraint, add it with a special cost.
                     else:
-                        cost = distance(q, q_prime) *\
-                                abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
+                        #cost = distance(q, q_prime) *\
+                        #        abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))*1000
+                        cost = distance(q, q_prime) * len(s_q.difference(v_q))
                         actions.append((q_prime, cost))
             else:
                 # In the not relaxed case only add nodes when the visibility constraint holds.
@@ -407,7 +411,7 @@ class Vamp(Planner):
 
 
 
-    def a_star(self, q_start, q_goal, v_0, H, relaxed, action_fn, obstructions=set()):
+    def a_star(self, q_start, q_goal, v_0, H, relaxed, action_fn, obstructions=set(), from_required=False):
         """
         A* search algorithm.
 
@@ -428,6 +432,9 @@ class Vamp(Planner):
             extended = set()
             paths = [([q_start], 0, 0)]
 
+            if from_required:
+                q_goal = None
+
             while paths:
                 current = paths.pop(-1)
                 best_path = current[0]
@@ -438,13 +445,23 @@ class Vamp(Planner):
                     continue
 
                 # If goal is found return it, graph the search, and output the elapsed time.
-                if best_path[-1] == q_goal:
-                    done = time.time() - current_t
-                    print("Extended nodes: {}".format(len(extended)))
-                    print("Search Time: {}".format(done))
-                    if self.debug:
-                        self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
-                    return best_path
+                if not from_required:
+                    if best_path[-1] == q_goal:
+                        done = time.time() - current_t
+                        print("Extended nodes: {}".format(len(extended)))
+                        print("Search Time: {}".format(done))
+                        if self.debug:
+                            self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
+                        return best_path
+                else:
+                    if H(best_path[-1]) == 0:
+                        q_goal = best_path[-1]
+                        done = time.time() - current_t
+                        print("Extended nodes: {}".format(len(extended)))
+                        print("Search Time: {}".format(done))
+                        if self.debug:
+                            self.G.plot_search(self.env, extended, path=best_path, goal=q_goal)
+                        return best_path
 
                 extended.add(best_path[-1])
                 actions = action_fn(best_path, v_0, relaxed=relaxed, extended=extended, obstructions=obstructions)
