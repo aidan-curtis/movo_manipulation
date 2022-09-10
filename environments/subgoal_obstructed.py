@@ -14,7 +14,7 @@ class SubObs(Environment):
         super(SubObs, self).__init__()
 
         self.start = (0, 0, 0)
-        self.goal = (5.4, 0, 0) # TODO: Create separate class for configuration space
+        self.goal = (5.4, -0.4, 0) # TODO: Create separate class for configuration space
 
 
         self.objects = []
@@ -48,7 +48,7 @@ class SubObs(Environment):
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
-                        x=3.5,
+                        x=4,
                         y=3.5,
                         z=0.42,
                     )
@@ -77,7 +77,7 @@ class SubObs(Environment):
         set_pose(floor1, Pose(Point(x=center[0], y=center[1])))
 
         floor2 = self.create_pillar(width=1.9, length=3.8, color=TAN)
-        set_pose(floor2, Pose(Point(x=4+0.05, y=0.9, z=0.001)))
+        set_pose(floor2, Pose(Point(x=4 + 0.05, y=0.9, z=0.001)))
 
         wall_thickness = 0.1
         # Left wall
@@ -103,14 +103,19 @@ class SubObs(Environment):
         # Dividing wall
         wall_5 = self.create_pillar(length=3.9, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_5,
-                 Pose(point=Point(y=0.95, x=2.2, z=wall_height / 2)))
+                 Pose(point=Point(y=0.95, x=3, z=wall_height / 2)))
 
         # Miniature wall
-        wall_6 = self.create_pillar(length=4.9, width=wall_thickness, height=0.3, color=LIGHT_GREY)
+        wall_6 = self.create_pillar(length=5.1, width=wall_thickness, height=0.7, color=LIGHT_GREY)
         set_pose(wall_6,
-                 Pose(point=Point(y=1.45, x=4.8, z=0.15)))
+                 Pose(point=Point(y=1.55, x=4.75, z=0.351)))
 
-        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6]
+        wall_7 = self.create_pillar(length=5.1, width=wall_thickness, height=0.39, color=LIGHT_GREY)
+        set_pose(wall_7,
+                 Pose(point=Point(y=1.55, x=4.85, z=0.1951)))
+
+
+        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7]
         floors = [floor1, floor2]
         aabb = AABB(lower=(center[0] - width / 2.0, center[1] - length / 2.0, 0.05),
                     upper=(center[0] + width / 2.0, center[1] + length / 2.0, GRID_HEIGHT))

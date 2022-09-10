@@ -148,7 +148,7 @@ class Namo(Planner):
                     continue
 
                 self.env.movable_boxes.append(obj_obstruction)
-                return [(x, None) for x in p_attach] + [(y, obj) for y in p_place] +\
+                return [(x, None) for x in p_attach] + [(y, [obj_obstruction, grasp, obj]) for y in p_place] +\
                        [(x, None) for x in p_goal]
         self.env.movable_boxes.append(obj_obstruction)
         return None
@@ -258,22 +258,28 @@ class Namo(Planner):
         """
         gained_vision = set()
         executed = []
-        current_grasp, coll_obj = None, None
         attachment = None
         for qi, node in enumerate(path):
-            q, obj = node
+            q, att = node
+            if att is not None:
+                obj_aabb = att[0].aabb
+                obj = att[2]
+            else:
+                obj_aabb = None
+                obj = None
 
             # Check if we are grasping a new object
             if attachment is None and obj is not None:
-                coll_obj = self.env.get_movable_box_from_obj(obj)
+                coll_obj = self.env.get_movable_box_from_aabb(obj_aabb)
                 # Compute the grasp transform of the attachment.
-                base_pose = Pose(point=Point(x=q[0], y=q[1]), euler=Euler(yaw=q[2]),)
-                obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
+                base_pose = Pose(point=Point(x=q[0], y=q[1]), euler=Euler(yaw=q[2]), )
+                # obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
+                obj_pose = get_pose(obj)
                 current_grasp = multiply(invert(base_pose), obj_pose)
                 attachment = [coll_obj, current_grasp, obj]
                 self.env.remove_movable_object(coll_obj)
             elif attachment is not None and obj is None:
-                oobb = self.env.movable_object_oobb_from_q(attachment[0], path[qi-1][0], attachment[1])
+                oobb = self.env.movable_object_oobb_from_q(attachment[0], path[qi - 1][0], attachment[1])
                 self.env.movable_boxes.append(oobb)
                 attachment = None
 
@@ -309,43 +315,42 @@ class Namo(Planner):
         return q, True, gained_vision, executed
 
     def find_obstruction_ahead(self, path, att):
-        placed_back = []
-        needed_back = []
+        cached_movables = list(self.env.movable_boxes)
         if att is not None:
             oobb = self.env.movable_object_oobb_from_q(att[0], path[0][0], att[1])
             self.env.movable_boxes.append(oobb)
-            placed_back.append(oobb)
 
         attachment = None
         for qi, node in enumerate(path):
-            q, obj = node
+            q, att = node
+            if att is not None:
+                obj_aabb = self.env.movable_object_oobb_from_q(att[0], q, att[1]).aabb
+                obj = att[2]
+            else:
+                obj_aabb = None
+                obj = None
             # Check if we are grasping a new object
             if attachment is None and obj is not None:
-                coll_obj = self.env.get_movable_box_from_obj(obj)
+                coll_obj = self.env.get_movable_box_from_aabb(obj_aabb)
                 # Compute the grasp transform of the attachment.
                 base_pose = Pose(point=Point(x=q[0], y=q[1]), euler=Euler(yaw=q[2]), )
                 obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
                 current_grasp = multiply(invert(base_pose), obj_pose)
                 attachment = [coll_obj, current_grasp, obj]
                 self.env.remove_movable_object(coll_obj)
-                needed_back.append(coll_obj)
 
             elif attachment is not None and obj is None:
                 oobb = self.env.movable_object_oobb_from_q(attachment[0], path[qi - 1][0], attachment[1])
                 self.env.movable_boxes.append(oobb)
-                placed_back.append(oobb)
                 attachment = None
 
             obstructions, collided_obj = self.env.obstruction_from_path([q], set(),
-                                                                    attachment=attachment)
+                                                                        attachment=attachment)
             if obstructions.shape[0] > 0 or collided_obj is not None:
-                self.env.movable_boxes += needed_back
-                for box in placed_back:
-                    self.env.remove_movable_object(box)
+                self.env.movable_boxes = list(cached_movables)
                 return obstructions, collided_obj
-        self.env.movable_boxes += needed_back
-        for box in placed_back:
-            self.env.remove_movable_object(box)
+
+        self.env.movable_boxes = list(cached_movables)
         return obstructions, collided_obj
 
     def save_state(self):

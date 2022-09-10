@@ -85,16 +85,16 @@ class SimpleVision(Environment):
                  Pose(point=Point(y=0.95, x=2.2, z=wall_height / 2)))
 
         # Miniature wall
-        wall_6 = self.create_pillar(length=4.9, width=wall_thickness, height=0.7, color=LIGHT_GREY)
+        wall_6 = self.create_pillar(length=5.1, width=wall_thickness, height=0.7, color=LIGHT_GREY)
         set_pose(wall_6,
-                 Pose(point=Point(y=1.45, x=4.75, z=0.351)))
+                 Pose(point=Point(y=1.55, x=4.75, z=0.351)))
 
-        wall_7 = self.create_pillar(length=4.9, width=wall_thickness, height=0.39, color=LIGHT_GREY)
+        wall_7 = self.create_pillar(length=5.1, width=wall_thickness, height=0.39, color=LIGHT_GREY)
         set_pose(wall_7,
-                 Pose(point=Point(y=1.45, x=4.85, z=0.1951)))
+                 Pose(point=Point(y=1.55, x=4.85, z=0.1951)))
 
 
-        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_7]
+        walls = [wall_1, wall_2, wall_3, wall_4, wall_5, wall_6, wall_7]
         floors = [floor1, floor2]
         aabb = AABB(lower=(center[0] - width / 2.0, center[1] - length / 2.0, 0.05),
                     upper=(center[0] + width / 2.0, center[1] + length / 2.0, GRID_HEIGHT))

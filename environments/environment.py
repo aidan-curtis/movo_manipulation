@@ -12,7 +12,7 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection, get_joint_positions,
                                                     get_aabb_volume, load_model, get_link_names, get_all_links,
-                                                    wait_if_gui)
+                                                    wait_if_gui, BLACK)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.graph import Graph
 from utils.motion_planning_interface import DEFAULT_JOINTS
@@ -362,7 +362,7 @@ class Environment(ABC):
             resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
         )
         static_grid = VoxelGrid(
-            resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
+            resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLACK
         )
         for voxel in grid.voxels_from_aabb(surface_aabb):
             grid.set_occupied(voxel)
@@ -475,11 +475,11 @@ class Environment(ABC):
         extra_obs.update(obstructions)
         if attachment is not None:
             obj_oobb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
-            extra_obs.update(set([x for x in self.occupancy_grid.voxels_from_aabb(obj_oobb.aabb)]))
+            extra_obs.update(self.occupancy_grid.voxels_from_aabb(obj_oobb.aabb))
 
         # Get the occlusion given by the movable objects
         for obj in self.movable_boxes:
-            extra_obs.update(set([x for x in self.occupancy_grid.voxels_from_aabb(obj.aabb)]))
+            extra_obs.update(self.occupancy_grid.voxels_from_aabb(obj.aabb))
 
 
         # Only filter those voxels that are not obstructed by an occupied voxel
@@ -514,7 +514,7 @@ class Environment(ABC):
         x1, y1, z1 = start_cell
         x2, y2, z2 = goal_cell
         ListOfPoints = []
-        if grid.contains((x1, y1, z1)) or (x1, y1,z1) in extra_obs:
+        if grid.contains((x1, y1, z1)) or (x1, y1, z1) in extra_obs:
             return ListOfPoints, True
         ListOfPoints.append((x1, y1, z1))
         dx = abs(x2 - x1)
@@ -1084,10 +1084,12 @@ class Environment(ABC):
             for movable_box in enforced_obstacles:
                 if aabb_overlap(movable_box.aabb, aabb):
                     movable_coll = movable_box
+                    occupancy_points = np.array(list(q))
                     break
                 if attachment is not None:
                     if aabb_overlap(movable_box.aabb, obj_aabb):
                         movable_coll = movable_box
+                        occupancy_points = np.array(list(q))
                         break
 
         return occupancy_points, movable_coll
@@ -1154,7 +1156,7 @@ class Environment(ABC):
         """
         MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
         MOVO_PATH = os.path.abspath(MOVO_URDF)
-        robot_body = load_pybullet(MOVO_PATH, fixed_base=True, scale=1.1)
+        robot_body = load_pybullet(MOVO_PATH, fixed_base=True, scale=1.15)
 
         self.set_defaults(robot_body)
 

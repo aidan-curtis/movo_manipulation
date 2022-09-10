@@ -5,7 +5,7 @@ from pybullet_planning.pybullet_tools.utils import (wait_if_gui, Pose,
                                                     Point, set_joint_positions, joint_from_name,
                                                     multiply, invert, get_aabb_volume,
                                                     Euler, get_aabb_center, set_pose, get_pose, OOBB, AABB, scale_aabb,
-                                                    get_aabb)
+                                                    get_aabb, draw_aabb, LockRenderer)
 import numpy as np
 import time
 import datetime
@@ -48,6 +48,7 @@ class Lamb(Planner):
         self.vision_q = dict()
         self.final_executed = []
         self.object_poses = None
+        self.max_movables = 0
 
     def get_plan(self, loadfile=None, debug=False, **kwargs):
         """
@@ -87,10 +88,13 @@ class Lamb(Planner):
             self.env.plot_grids(True, True, True)
             print("State loaded")
 
+
+
         complete = False
         # Continue looking for a plan until the robot has reached the goal.
         while not complete:
             # Save the movable boxes since they get changed during planning.
+            self.max_movables = len(self.env.movable_boxes)
             mov_boxes_cache = list(self.env.movable_boxes)
             path = self.lamb(self.current_q, q_goal, self.v_0)
             # If at any point there is no possible path, then the search is ended.
@@ -118,7 +122,8 @@ class Lamb(Planner):
         # Search for repeated nodes in a sequence and filter them.
         return [key for key, _group in groupby(self.final_executed)]
 
-    def lamb(self, q_start, q_goal, v_0, attachment=None, obstructions=set(), enforced_obstacles=[], wrong_placements=set()):
+    def lamb(self, q_start, q_goal, v_0, attachment=None, obstructions=set(), enforced_obstacles=[],
+             wrong_placements=set(), from_required=False, H=None):
         """
         Main function for path planning using VAMP.
 
@@ -134,26 +139,44 @@ class Lamb(Planner):
         v = set(v_0)
         q = q_start
 
+        enf_obs = set()
+        for oobb in enforced_obstacles:
+            enf_obs = enf_obs.union(self.env.occupancy_grid.voxels_from_aabb(oobb.aabb))
+
         while True:
             # Find a path to goal, keeping the visualization constraint and return it if found
-            p_final = self.a_star(q, q_goal, v, attachment=attachment, obstructions=obstructions,
-                                  enforced_obstacles=enforced_obstacles)
+            p_final = self.a_star(q, q_goal, v, H=H, attachment=attachment, obstructions=obstructions,
+                                  enforced_obstacles=enforced_obstacles, from_required=from_required)
             if p_final is not None:
                 p_final = [(x, attachment) for x in p_final]
                 return p + p_final
             print("Couldn't find a direct path. Looking for a relaxed one")
 
-            # If a path to goal can't be found, find a relaxed path and use it as a subgoal
-            p_relaxed = self.a_star(q, q_goal, v, attachment=attachment, relaxed=True, obstructions=obstructions)
+            # If we are looking for visibility subgoals, just find directly through movable
+            if from_required:
+                p_relaxed = None
+            else:
+                # If a path to goal can't be found, find a relaxed path and use it as a subgoal
+                p_relaxed = self.a_star(q, q_goal, v, H=H, attachment=attachment, relaxed=True, obstructions=obstructions,
+                                    from_required=from_required, enforced_obstacles=enforced_obstacles)
             if p_relaxed is None:
                 new_enforced = list(enforced_obstacles)
                 p_move = None
-                while len(new_enforced) < len(self.env.movable_boxes):
+
+                while True:
+                    if attachment is not None:
+                        if len(new_enforced)+1 >= self.max_movables:
+                            break
+                    else:
+                        if len(new_enforced) >= self.max_movables:
+                            break
+
                     print("Can't find any path. Looking through movable obstacles")
-                    p_through = self.a_star(q, q_goal, v, attachment=attachment, relaxed=True,
+                    p_through = self.a_star(q, q_goal, v, H=H, attachment=attachment, relaxed=True,
                                             ignore_movable=True,
                                             obstructions=obstructions,
-                                            enforced_obstacles=new_enforced)
+                                            enforced_obstacles=new_enforced,
+                                            from_required=from_required)
                     if p_through is None:
                         break
 
@@ -161,11 +184,12 @@ class Lamb(Planner):
                     if attachment is not None:
                         backchain_enforced += [attachment[0]]
 
-                    p_move = self.move_out_backchain(q, q_goal, p_through, v,
+                    p_move = self.move_out_backchain(q, q_goal, p_through, v, H=H,
                                                      attachment=attachment,
                                                      obstructions=obstructions,
                                                      enforced_obstacles=backchain_enforced,
-                                                     wrong_placements=wrong_placements)
+                                                     wrong_placements=wrong_placements,
+                                                     from_required=from_required)
 
                     if p_move is None:
                         print("Restricting which objects we can pass through")
@@ -179,45 +203,69 @@ class Lamb(Planner):
                     print("Can't find any path. Aborting")
                     return None
                 p += p_move
-                v = v.union(self.env.get_optimistic_path_vision(p_move, self.G))
+                v = v.union(self.env.get_optimistic_path_vision(p_move, self.G, obstructions=enf_obs))
                 q = p_move[-1][0]
                 continue
-            new_obs = set(obstructions)
+
+
             new_enf = list(enforced_obstacles)
             if attachment is not None:
-                new_obs.update(obstructions.union(self.env.occupancy_grid.voxels_from_aabb(attachment[0].aabb)))
                 new_enf += [attachment[0]]
+            new_obs = set()
+            for oobb in new_enf:
+                new_obs = enf_obs.union(self.env.occupancy_grid.voxels_from_aabb(oobb.aabb))
             p_relaxed_voxels = self.env.visibility_voxels_from_path(p_relaxed, attachment=attachment)
-
+            required_viewing = p_relaxed_voxels.difference(v)
             print("Planning to view a subgoal")
-            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed, attachment=attachment).difference(v), v,
-                              obstructions=new_obs, enforced_obstacles=new_enf,
-                              wrong_placements=wrong_placements.union(p_relaxed_voxels))
-            # If the relaxed version fails, explore some environment. And restart the search
-            if p_vis is None:
-                print("P_VIS failed. Observing some of the environment")
-                W = set(self.env.static_vis_grid.value_from_voxel.keys())
-                p_vis = self.tourist(q, W.difference(v), v,
-                                     obstructions=new_obs, enforced_obstacles=new_enf,
-                                     wrong_placements=wrong_placements.union(p_relaxed_voxels))
-            if p_vis is None:
-                print("P_VIS failed again. Aborting")
-                return None
+
+            while len(required_viewing) > 0:
+                p_vis = self.vavp(q, required_viewing, v, obstructions=obstructions, enforced_obstacles=new_enf,
+                                  wrong_placements=wrong_placements.union(p_relaxed_voxels))
+                # If the relaxed version fails, explore some environment. And restart the search
+                if p_vis is None:
+                    print("P_VIS failed. Observing some of the environment")
+                    W = set(self.env.static_vis_grid.value_from_voxel.keys())
+                    p_vis = self.tourist(q, W.difference(v), v,
+                                         obstructions=obstructions, enforced_obstacles=new_enf,
+                                         wrong_placements=wrong_placements.union(p_relaxed_voxels))
+                if p_vis is None:
+                    print("P_VIS failed again. Aborting")
+                    return None
+                p += p_vis
+                v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G, obstructions=new_obs))
+                q = p_vis[-1][0]
+
+                # Check if we made progress seen the area, if we did, then don't change the p_relaxed
+                # Otherwise, find a new p_relaxed
+                required_viewing_check = p_relaxed_voxels.difference(v)
+                if len(required_viewing) != len(required_viewing_check):
+                    required_viewing = required_viewing_check
+                else:
+                    p_relaxed = self.a_star(q, q_goal, v, H=H, attachment=attachment, relaxed=True, obstructions=obstructions,
+                                    from_required=from_required, enforced_obstacles=enforced_obstacles)
+                    if p_relaxed is None:
+                        break
+                    p_relaxed_voxels = self.env.visibility_voxels_from_path(p_relaxed, attachment=attachment)
+                    required_viewing = p_relaxed_voxels.difference(v)
 
             print("Planning to subgoal succeeded. Replanning final path")
             # Return to the starting configuration if we were moving an object
             if attachment is not None:
-                p_return = self.a_star(p_vis[-1][0], q_start, v.union(self.env.get_optimistic_path_vision(p_vis, self.G)),
+                p_return = self.a_star(p[-1][0], q_start, v.union(self.env.get_optimistic_path_vision(p_vis, self.G,
+                                                                                                      obstructions=new_obs)),
                                        obstructions=obstructions,
-                                       enforced_obstacles=enforced_obstacles+[attachment[0]])
-                p_vis += [(x, None) for x in p_return]
+                                       enforced_obstacles=enforced_obstacles + [attachment[0]],
+                                       from_required=from_required)
+                p_return = [(x, None) for x in p_return]
+                p += p_return
+                v = v.union(self.env.get_optimistic_path_vision(p_return, self.G, obstructions=new_obs))
+                q = p_return[-1][0]
 
-            p += p_vis
-            v = v.union(self.env.get_optimistic_path_vision(p_vis, self.G))
-            q = p_vis[-1][0]
 
-    def move_out_backchain(self, q_start, q_goal, p_through, v_0, attachment=None,
-                           obstructions=set(), enforced_obstacles=[], wrong_placements=set()):
+
+    def move_out_backchain(self, q_start, q_goal, p_through, v_0, H=None, attachment=None,
+                           obstructions=set(), enforced_obstacles=[], wrong_placements=set(),
+                           from_required=False):
         """
         Path planning using vamp for clearing an object out of the way.
 
@@ -232,8 +280,11 @@ class Lamb(Planner):
         """
         self.current_q = q_start
 
+        new_obs = set()
+        for oobb in enforced_obstacles:
+            new_obs = new_obs.union(self.env.occupancy_grid.voxels_from_aabb(oobb.aabb))
+
         # Sample attachment poses
-        print(self.env.movable_boxes)
         obj_obstruction = self.env.find_path_movable_obstruction(p_through, attachment=attachment)
         voxels_from_obstruction = self.env.occupancy_grid.voxels_from_aabb(obj_obstruction.aabb)
         attachment_poses = self.env.sample_attachment_poses(obj_obstruction, self.G, obstructions=obstructions,
@@ -242,23 +293,27 @@ class Lamb(Planner):
         p_through_voxels = self.env.visibility_voxels_from_path(p_through, attachment=attachment)
 
         for attach_pose in attachment_poses:
+            cached_movables = list(self.env.movable_boxes)
             v = set(v_0)
             p_attach = self.lamb(q_start, attach_pose, v, obstructions=obstructions,
                                  enforced_obstacles=enforced_obstacles+[obj_obstruction],
                                  wrong_placements=wrong_placements.union(p_through_voxels))
             if p_attach is None:
+                self.env.movable_boxes = cached_movables
                 continue
 
-            v.update(self.env.get_optimistic_path_vision(p_attach, self.G))
+            v.update(self.env.get_optimistic_path_vision(p_attach, self.G, obstructions=new_obs))
             print("Ready to plan placement")
             self.env.remove_movable_object(obj_obstruction)
             max_samplings = 5
             i = 0
             while True:
                 v_p = set(v)
+                cached_movables_p = list(self.env.movable_boxes)
                 i += 1
                 if i > max_samplings:
                     print("Max number of placement samples reached")
+                    self.env.movable_boxes = cached_movables_p
                     self.env.movable_boxes.append(obj_obstruction)
                     break
                 q_place, grasp, obj = self.env.sample_placement(p_attach[-1][0], obj_obstruction, self.G,
@@ -266,6 +321,7 @@ class Lamb(Planner):
                                                                 enforced_obstacles=enforced_obstacles)
                 if q_place is None:
                     print("Can't find placement. Retrying attachment")
+                    self.env.movable_boxes = cached_movables_p
                     self.env.movable_boxes.append(obj_obstruction)
                     break
 
@@ -275,9 +331,10 @@ class Lamb(Planner):
                                     wrong_placements=wrong_placements.union(p_through_voxels),
                                     enforced_obstacles=enforced_obstacles)
                 if p_place is None:
+                    self.env.movable_boxes = cached_movables_p
                     print("Can't find path to placement. Finding different placement")
                     continue
-                v_p.update(self.env.get_optimistic_path_vision(p_place, self.G))
+                v_p.update(self.env.get_optimistic_path_vision(p_place, self.G, obstructions=new_obs))
 
                 # After the clearing is done then find a path to the goal, unless there is an object
                 # attached
@@ -288,15 +345,19 @@ class Lamb(Planner):
                                    enforced_obstacles=enforced_obstacles,
                                    wrong_placements=wrong_placements)
                 else:
-                    p_goal = self.lamb(p_place[-1][0], q_goal, v_p, obstructions=obstructions,
+                    p_goal = self.lamb(p_place[-1][0], q_goal, v_p, H=H, obstructions=obstructions,
                                    enforced_obstacles=enforced_obstacles,
-                                   wrong_placements=wrong_placements)
+                                   wrong_placements=wrong_placements,
+                                       from_required=from_required)
                 if p_goal is None:
+                    self.env.movable_boxes = cached_movables_p
                     self.env.remove_movable_object(obj_oobb_placed)
                     print("Can't find path to goal after placement. Finding different placement")
                     continue
 
                 return p_attach + p_place + p_goal
+            self.env.movable_boxes = cached_movables
+        self.env.movable_boxes = cached_movables
         return None
 
     def vavp(self, q, R, v, obstructions=set(), enforced_obstacles=[], wrong_placements=set()):
@@ -312,20 +373,15 @@ class Lamb(Planner):
         Returns:
             list: The suggested path that views some of the area of interest.
         """
-        q_goal = None
-        while q_goal is None:
-            q_goal = self.sample_goal_from_required(R, obstructions=obstructions)
-        print("Subgoal found")
-
         # Try visualizing the area of interest keeping the vision constraint.
-        p_vis = self.tourist(q, R, v, q_goal=q_goal, obstructions=obstructions, enforced_obstacles=enforced_obstacles,
+        p_vis = self.tourist(q, R, v, obstructions=obstructions, enforced_obstacles=enforced_obstacles,
                              wrong_placements=wrong_placements)
         if p_vis is not None:
             return p_vis
         # If it can't view the area, find a relaxed path that does the same and make this new path
         # the new subgoal. Call the function recursively.
         obstructions_new = obstructions.union(R)
-        p_relaxed = self.tourist(q, R, v, q_goal=q_goal, relaxed=True, obstructions=obstructions_new,
+        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new,
                                  enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
         if p_relaxed is not None:
             p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v,
@@ -335,35 +391,8 @@ class Lamb(Planner):
                 return p_vis
         return None
 
-    def sample_goal_from_required(self, R, ignore_movable=False, obstructions=set()):
-        """
-        Samples a goal position that views most of the required region
-
-        Args:
-            R (set) : Set of voxels that define the area we are interested in gaining vision from.
-            obstructions (set): Set of tuples that define the space that the robot can't occupy.
-            ignore_movable (bool): Whether to ignore collisions with movable objects or not.
-        Returns:
-            A configuration where the robot sees most of the space, from a set of random configurations.
-        """
-        q_goal = None
-        score = 0
-        number_of_samples = 1000
-        # Sample a goal position that views most of the space of interest.
-        rand_qs = self.G.rand_vex(self.env, samples=number_of_samples)
-        for q_rand in rand_qs:
-            # Check collisions with obstacle and movable objects if required
-            collisions, coll_objects = self.env.obstruction_from_path([q_rand], obstructions)
-            if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
-                new_score = len(self.env.get_optimistic_vision(q_rand, self.G, obstructions=obstructions).intersection(R))
-                if new_score != 0:
-                    if new_score > score:
-                        q_goal = q_rand
-                        score = new_score
-        return q_goal
-
-    def tourist(self, q_start, R, v_0, q_goal=None, relaxed=False, obstructions=set(), ignore_movable=False, enforced_obstacles=[],
-                wrong_placements=set()):
+    def tourist(self, q_start, R, v_0, q_goal=None, relaxed=False, obstructions=set(), ignore_movable=False,
+                enforced_obstacles=[], wrong_placements=set()):
         """
         Procedure used to find a path that partially or completely views some area of interest.
 
@@ -377,13 +406,24 @@ class Lamb(Planner):
         Returns:
             list: The suggested path that views some area of interest.
         """
-        while q_goal is None:
-            q_goal = self.sample_goal_from_required(R, ignore_movable=ignore_movable,
-                                                    obstructions=obstructions)
-        print("Subgoal found")
+        new_obs = set()
+        for oobb in enforced_obstacles:
+            new_obs = new_obs.union(self.env.occupancy_grid.voxels_from_aabb(oobb.aabb))
+        def heuristic_fn(q):
+            # Previously used code that defines the heuristic as the smallest distance from the vision
+            # gained in the configuration to the area of interest.
+            vision_q = self.env.get_optimistic_vision(q, self.G, obstructions=new_obs)
+            if len(R.intersection(vision_q)) != 0:
+                return 0
+            if len(vision_q) == 0:
+                return (self.env.room.aabb.upper[0] - self.env.room.aabb.lower[0])/2
+            s1 = np.array(list(vision_q))
+            s2 = np.array(list(R))
+            return scipy.spatial.distance.cdist(s1, s2).min()*GRID_RESOLUTION
 
-        return self.lamb(q_start, q_goal, v_0, obstructions=obstructions,
-                         enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
+        return self.lamb(q_start, q_goal, v_0, H=heuristic_fn, obstructions=obstructions,
+                         enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements,
+                         from_required=True)
 
     def action_fn(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
                        ignore_movable=False, attachment=None, enforced_obstacles=[]):
@@ -405,6 +445,10 @@ class Lamb(Planner):
         """
         actions = []
         q = path[-1]
+        new_obs = set()
+        for oobb in enforced_obstacles:
+            new_obs = new_obs.union(self.env.occupancy_grid.voxels_from_aabb(oobb.aabb))
+
         # Retrieve all the neighbors of the current node based on the graph of the space.
         for q_prime_i in self.G.neighbors[self.G.vex2idx[q]]:
             q_prime = self.G.vertices[q_prime_i]
@@ -428,10 +472,12 @@ class Lamb(Planner):
                                                                           enforced_obstacles=enforced_obstacles)
                 if not collisions.shape[0] > 0 and (ignore_movable or coll_objects is None):
                     if len(path) == 1:
-                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment,
+                                                                       obstructions=new_obs))
                     else:
                         v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G,
-                                                                                           attachment=attachment))
+                                                                                           attachment=attachment,
+                                                                                           obstructions=new_obs))
                     self.vision_q[q] = v_q
                     s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
                     # If the node follows the visibility constraint, add it normally.
@@ -439,8 +485,9 @@ class Lamb(Planner):
                         actions.append((q_prime, distance(q, q_prime)))
                     # If it does not follow the visibility constraint, add it with a special cost.
                     else:
-                        cost = distance(q, q_prime) *\
-                                abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
+                        # cost = distance(q, q_prime) *\
+                        #         abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
+                        cost = distance(q, q_prime) * len(s_q.difference(v_q))
                         actions.append((q_prime, cost))
             else:
                 # In the not relaxed case only add nodes when the visibility constraint holds.
@@ -453,10 +500,12 @@ class Lamb(Planner):
                     #if self.env.in_view_cone(s_q, path):
                     #    actions.append((q_prime, distance(q, q_prime)))
                     if len(path) == 1:
-                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment))
+                        v_q = v_0.union(self.env.get_optimistic_vision(q, self.G, attachment=attachment,
+                                                                       obstructions=new_obs))
                     else:
                         v_q = self.vision_q[path[-2]].union(self.env.get_optimistic_vision(q, self.G,
-                                                                                           attachment=attachment))
+                                                                                           attachment=attachment,
+                                                                                           obstructions=new_obs))
                     self.vision_q[q] = v_q
                     s_q = self.env.visibility_voxels_from_path([q, q_prime], attachment=attachment)
                     if s_q.issubset(v_q):
@@ -480,8 +529,8 @@ class Lamb(Planner):
         voxel_vol = get_aabb_volume(grid.aabb_from_voxel(next(iter(voxels))))
         return voxel_vol*len(voxels)
 
-    def a_star(self, q_start, q_goal, v_0, relaxed=False, obstructions=set(),
-               ignore_movable=False, attachment=None, enforced_obstacles=[]):
+    def a_star(self, q_start, q_goal, v_0, H=None, relaxed=False, obstructions=set(),
+               ignore_movable=False, attachment=None, enforced_obstacles=[], from_required=False):
         """
         A* search algorithm.
 
@@ -496,11 +545,17 @@ class Lamb(Planner):
         Returns:
             list: The path from start to goal.
         """
+        if H is None or not from_required:
+            H = lambda x: distance(x, q_goal)
+
         try:
             # Timing the search for benchmarking purposes.
             current_t = time.time()
             extended = set()
             paths = [([q_start], 0, 0)]
+
+            if from_required:
+                q_goal = None
 
             while paths:
                 current = paths.pop(-1)
@@ -512,21 +567,35 @@ class Lamb(Planner):
                     continue
 
                 # If goal is found return it, graph the search, and output the elapsed time.
-                if best_path[-1] == q_goal:
-                    done = time.time() - current_t
-                    print("Extended nodes: {}".format(len(extended)))
-                    print("Search Time: {}".format(done))
-                    if self.debug:
-                        self.G.plot_search(self.env, extended, path=best_path, goal=q_goal, enforced_obstacles=enforced_obstacles,
-                                           R=obstructions)
-                    return best_path
+                if not from_required:
+                    if best_path[-1] == q_goal:
+                        done = time.time() - current_t
+                        print("Extended nodes: {}".format(len(extended)))
+                        print("Search Time: {}".format(done))
+                        if self.debug:
+                            self.G.plot_search(self.env, extended, path=best_path, goal=q_goal, enforced_obstacles=enforced_obstacles,
+                                               R=obstructions)
+                        return best_path
+
+                else:
+                    if H(best_path[-1]) == 0:
+                        q_goal = best_path[-1]
+                        done = time.time() - current_t
+                        print("Extended nodes: {}".format(len(extended)))
+                        print("Search Time: {}".format(done))
+                        if self.debug:
+                            self.G.plot_search(self.env, extended, path=best_path, goal=q_goal,
+                                               enforced_obstacles=enforced_obstacles,
+                                               R=obstructions)
+                        return best_path
+
 
                 extended.add(best_path[-1])
                 actions = self.action_fn(best_path, v_0, relaxed=relaxed, extended=extended,
                                     obstructions=obstructions, ignore_movable=ignore_movable,
                                     attachment=attachment, enforced_obstacles=enforced_obstacles)
                 for action in actions:
-                    paths.append((best_path + [action[0]], best_path_cost + action[1], distance(action[0], q_goal)))
+                    paths.append((best_path + [action[0]], best_path_cost + action[1], H(action[0])))
 
                 # Only sorting from heuristic. Faster but change if needed
                 if USE_COST:

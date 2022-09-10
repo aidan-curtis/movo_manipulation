@@ -119,4 +119,4 @@ if __name__=="__main__":
         env.move_robot(q, env.joints, att)
         wait_if_gui()
     wait_if_gui()
-    #write_results(args, statistics)
+    write_results(args, statistics)

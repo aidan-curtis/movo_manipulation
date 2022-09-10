@@ -9,7 +9,7 @@ class SimpleNavigation(Environment):
         super(SimpleNavigation, self).__init__()
 
         self.start = (0, 0, 0)
-        self.goal = (2.4, 0, round(np.pi/2,3))  # TODO: Create separate class for configuration space
+        self.goal = (2.2, 0, round(3*np.pi/2, 3))  # TODO: Create separate class for configuration space
         self.objects = []
         self.viewed_voxels = []
 
