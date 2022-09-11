@@ -736,7 +736,8 @@ class Environment(ABC):
                 return movable_box
 
 
-    def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set(), enforced_obstacles=[]):
+    def sample_placement(self, q_start, coll_obj, G, p_through, obstructions=set(), enforced_obstacles=[],
+                         in_viewed=False):
         """
         Samples a placement position for an object such that it does not collide with a given path
 
@@ -773,6 +774,12 @@ class Environment(ABC):
             aabb = self.movable_object_oobb_from_q(coll_obj, rand_q, base_grasp).aabb
             if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
+            if in_viewed:
+                if len(self.visibility_grid.occupied_voxels_from_aabb(aabb)):
+                    continue
+                if len(self.visibility_grid.occupied_voxels_from_aabb(self.aabb_from_q(rand_q))):
+                    continue
+
             obst, coll = self.obstruction_from_path([rand_q], p_through.union(obstructions),
                                                     attachment=[coll_obj, base_grasp], ignore_movable=True,
                                                     enforced_obstacles=enforced_obstacles)
@@ -1046,8 +1053,9 @@ class Environment(ABC):
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                           (occ_points_from_obs <= aabb.upper), axis=1)
-                occupancy_points = np.concatenate([occupancy_points,
-                                                   occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                      occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
@@ -1064,8 +1072,9 @@ class Environment(ABC):
                 if len(obstruction) > 0:
                     vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                               (occ_points_from_obs <= aabb.upper), axis=1)
-                    occupancy_points = np.concatenate([occupancy_points,
-                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                    if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
+                        occupancy_points = np.concatenate([occupancy_points,
+                                                           occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:

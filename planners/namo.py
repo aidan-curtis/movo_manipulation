@@ -128,7 +128,7 @@ class Namo(Planner):
                     self.env.movable_boxes.append(obj_obstruction)
                     break
                 q_place, grasp, obj = self.env.sample_placement(p_attach[-1], obj_obstruction, self.G,
-                                                                p_through_voxels)
+                                                                p_through_voxels, in_viewed=True)
                 if q_place is None:
                     print("Can't find placement. Retrying attachment")
                     self.env.movable_boxes.append(obj_obstruction)
@@ -184,10 +184,11 @@ class Namo(Planner):
                 continue
 
             # Restrict A* to only move forward or rotate
-            angle = np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0])
-            angle = round(angle + 2 * np.pi, 3) if angle < 0 else round(angle, 3)
-            if q[:2] != q_prime[:2] and (angle != q[2]):
-                continue
+            if attachment is None:
+                angle = np.arctan2(q_prime[1] - q[1], q_prime[0] - q[0])
+                angle = round(angle + 2 * np.pi, 3) if angle < 0 else round(angle, 3)
+                if q[:2] != q_prime[:2] and (angle != q[2]):
+                    continue
 
             # Check for whether the new node is in obstruction with any obstacle.
             collisions, coll_objects = self.env.obstruction_from_path([q, q_prime], set(),

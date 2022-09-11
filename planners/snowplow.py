@@ -163,7 +163,7 @@ class Snowplow(Planner):
                     continue
 
                 self.env.movable_boxes.append(obj_obstruction)
-                return [(x, None) for x in p_attach] + [(y, obj) for y in p_place] +\
+                return [(x, None) for x in p_attach] + [(y, [obj_obstruction, grasp, obj]) for y in p_place] +\
                        [(x, None) for x in p_goal]
         self.env.movable_boxes.append(obj_obstruction)
         return None
