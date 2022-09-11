@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-import json 
+import pickle
 
 envs = ["simple_navigation", "simple_vision", "simple_namo", "complex", "subgoal_obstructed", "attachment_obstructed"]
 algs = ["a_star", "namo", "vamp", "lamb", "snowplow"]
@@ -24,7 +24,7 @@ env_name_map = {
 filenames = []
 results_dir = "/Users/aidancurtis/movo_manipulation/results/"
 for file in os.listdir(results_dir):
-    if file.endswith(".json"):
+    if file.endswith(".pkl"):
         filenames.append(os.path.join(results_dir, file))
 
 results_dict = {}
@@ -33,18 +33,19 @@ for env in envs:
     for alg in algs:
         for filename in filenames:
             if("env={}".format(env) in filename and "algo={}".format(alg) in filename):
-                with open(filename) as json_file:
-                    data = json.load(json_file)
+                with open(filename, 'rb') as handle:
+                    data = pickle.load(handle)
                     results_dict[env][alg].append(data)
-
-
-
 
 print("\\toprule")
 print("&{} \\\\ \\midrule".format("&".join(env_name_map.keys())))
 for (r_alg, v_alg) in alg_name_map.items():
     env_results = []
     for (r_env, v_env) in env_name_map.items():
+        # print(v_env)
+        # for q in results_dict[v_env][v_alg]:
+        #     if("plan_time" in q.keys()):
+        #         print(q["plan_time"])
         num_success = sum([int(q["success"]) for q in results_dict[v_env][v_alg]])
         num_total = len(results_dict[v_env][v_alg])
         env_results.append("{}/{}".format(num_success, num_total))

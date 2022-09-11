@@ -18,7 +18,7 @@ from environments.subgoal_obstructed import SubObs
 from environments.simple_namo import SimpleNamo
 from environments.simple_vision import SimpleVision
 from environments.real_world import RealWorld
-import json
+import pickle
 from datetime import datetime
 import os
 import time
@@ -107,18 +107,14 @@ def get_args():
     args = parser.parse_args()
     return args
 
-
-
 def write_results(args, statistics, save_dir):
-    now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    fn = "algo={}_env={}_seed={}.json".format(args.algo, args.env, args.seed)
+    fn = "algo={}_env={}_seed={}.pkl".format(args.algo, args.env, args.seed)
     results_fn = os.path.join(save_dir, fn)
-    with open(results_fn, 'w') as handle:
-        json.dump(statistics, handle)
+    with open(results_fn, 'wb') as handle:
+        pickle.dump(statistics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 if __name__=="__main__":
     args = get_args()
-
     random.seed(args.seed)
     env = ENVIRONMENTS[args.env](vis=args.vis)
     planner = PLANNERS[args.algo](env)
@@ -140,7 +136,8 @@ if __name__=="__main__":
         wait_if_gui()
         
     results_dict = {"success": statistics[0],
-                    "collisions":statistics[1], 
+                    "collisions":len(statistics[1]), 
+                    "plan": plan,
                     "plan_time":plan_time}
 
     write_results(args, results_dict, args.save_dir)
