@@ -428,8 +428,8 @@ class Lamb(Planner):
                          enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements,
                          from_required=True)
 
-    def action_fn(self, path, v_0, relaxed=False, extended=set(), obstructions=set(),
-                       ignore_movable=False, attachment=None, enforced_obstacles=[]):
+    def action_fn(self, path, v_0, relaxed=False, extended=None, obstructions=None,
+                       ignore_movable=False, attachment=None, enforced_obstacles=None):
         """
         Helper function to the search, that given a node, it gives all the possible actions to take with
         the inquired cost of each. Uses the vision constraint on each node based
@@ -446,6 +446,12 @@ class Lamb(Planner):
         Returns:
             list: A list of available actions with the respective costs.
         """
+        if extended is None:
+            extended = set()
+        if obstructions is None:
+            obstructions = set()
+        if enforced_obstacles is None:
+            enforced_obstacles = []
         actions = []
         q = path[-1]
         new_obs = set()
