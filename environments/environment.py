@@ -1053,8 +1053,9 @@ class Environment(ABC):
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                           (occ_points_from_obs <= aabb.upper), axis=1)
-                occupancy_points = np.concatenate([occupancy_points,
-                                                   occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                      occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
@@ -1071,8 +1072,9 @@ class Environment(ABC):
                 if len(obstruction) > 0:
                     vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                               (occ_points_from_obs <= aabb.upper), axis=1)
-                    occupancy_points = np.concatenate([occupancy_points,
-                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                    if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
+                        occupancy_points = np.concatenate([occupancy_points,
+                                                           occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:
