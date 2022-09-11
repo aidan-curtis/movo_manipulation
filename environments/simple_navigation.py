@@ -5,8 +5,8 @@ import numpy as np
 
 
 class SimpleNavigation(Environment):
-    def __init__(self):
-        super(SimpleNavigation, self).__init__()
+    def __init__(self, **kwargs):
+        super(SimpleNavigation, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (2.2, 0, round(3*np.pi/2, 3))  # TODO: Create separate class for configuration space

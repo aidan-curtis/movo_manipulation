@@ -68,7 +68,8 @@ def suppress_stdout():
 
 class Environment(ABC):
 
-    def __init__(self):
+    def __init__(self, vis=True):
+        self.vis = vis
         self.push_only = []
 
     def restrict_configuration(self, G):
@@ -429,9 +430,12 @@ class Environment(ABC):
         return np.min(np.sum(paths_rays, axis=0)) > 0
                     
     def connect(self):
-        p.connect(p.GUI)
-        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-        p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
+        if(self.vis):
+            p.connect(p.GUI)
+            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+            p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
+        else:
+            p.connect(p.DIRECT)
 
 
 

@@ -10,8 +10,8 @@ import numpy as np
 
 
 class SimpleVision(Environment):
-    def __init__(self):
-        super(SimpleVision, self).__init__()
+    def __init__(self, **kwargs):
+        super(SimpleVision, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (5.4, -0.4, 0)  # TODO: Create separate class for configuration space

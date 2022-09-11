@@ -12,8 +12,8 @@ import numpy as np
    
 
 class Complex(Environment):
-    def __init__(self):
-        super(Complex, self).__init__()
+    def __init__(self, **kwargs):
+        super(Complex, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (2, -4, round(np.pi/2, 3)) # TODO: Create separate class for configuration space

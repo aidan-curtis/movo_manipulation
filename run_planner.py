@@ -18,10 +18,11 @@ from environments.subgoal_obstructed import SubObs
 from environments.simple_namo import SimpleNamo
 from environments.simple_vision import SimpleVision
 from environments.real_world import RealWorld
-import pickle 
+import json
 from datetime import datetime
 import os
-
+import time
+import random
 
 PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
@@ -43,7 +44,6 @@ ENVIRONMENTS = {"empty": Empty,
                 "simple_vision": SimpleVision,
                 "real_world": RealWorld}
 
-RESULTS_DIR = "./results"
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -80,11 +80,27 @@ def get_args():
     )
 
     parser.add_argument(
+        "-s",
+        "--save_dir",
+        type=str,
+        default="./results",
+        help="Place to save statistics"
+    )
+
+    parser.add_argument(
         "-d",
         "--debug",
         type=str,
         default="False",
         help="Whether to enter in debugging mode"
+    )
+
+    parser.add_argument(
+        "-seed",
+        "--seed",
+        type=int,
+        default=0,
+        help="seed"
     )
 
 
@@ -93,30 +109,39 @@ def get_args():
 
 
 
-def write_results(args, statistics):
+def write_results(args, statistics, save_dir):
     now = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    fn = "algo={}_env={}_t={}".format(args.algo, args.env, now)
-    results_fn = os.path.join(RESULTS_DIR, fn)
-    with open(results_fn, 'wb') as handle:
-        pickle.dump(statistics, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    fn = "algo={}_env={}_seed={}.json".format(args.algo, args.env, args.seed)
+    results_fn = os.path.join(save_dir, fn)
+    with open(results_fn, 'w') as handle:
+        json.dump(statistics, handle)
 
 if __name__=="__main__":
     args = get_args()
 
-    env = ENVIRONMENTS[args.env]()
-
+    random.seed(args.seed)
+    env = ENVIRONMENTS[args.env](vis=args.vis)
     planner = PLANNERS[args.algo](env)
+    start_time = time.time()
     plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+    plan_time = time.time()-start_time
     print(plan)
     wait_if_gui()
     statistics = env.validate_plan(plan)
 
     print(statistics)
-    for q, att in statistics[1]:
-        draw_aabb(env.aabb_from_q(q))
-        if att is not None:
-            draw_aabb(env.movable_object_oobb_from_q(att[0], q, att[1]).aabb)
-        env.move_robot(q, env.joints, att)
+    if(args.vis):
+        for q, att in statistics[1]:
+            draw_aabb(env.aabb_from_q(q))
+            if att is not None:
+                draw_aabb(env.movable_object_oobb_from_q(att[0], q, att[1]).aabb)
+            env.move_robot(q, env.joints, att)
+            wait_if_gui()
         wait_if_gui()
-    wait_if_gui()
-    write_results(args, statistics)
+        
+    results_dict = {"success": statistics[0],
+                    "collisions":statistics[1], 
+                    "plan_time":plan_time}
+
+    write_results(args, results_dict, args.save_dir)
+    time.sleep(5)

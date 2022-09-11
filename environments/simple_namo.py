@@ -2,7 +2,7 @@ from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
 
 from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
-                                                    set_joint_position, load_model, get_aabb, joint_from_name,
+                                                    set_joint_position, get_aabb, joint_from_name,
                                                     set_joint_positions)
 import math
 import random
@@ -11,8 +11,8 @@ import numpy as np
 
 
 class SimpleNamo(Environment):
-    def __init__(self):
-        super(SimpleNamo, self).__init__()
+    def __init__(self, **kwargs):
+        super(SimpleNamo, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (4, 0, 0)  # TODO: Create separate class for configuration space

@@ -5,8 +5,8 @@ import numpy as np
 from utils.movo_sender import command_base
 
 class RealWorld(Environment):
-    def __init__(self):
-        super(RealWorld, self).__init__()
+    def __init__(self, **kwargs):
+        super(RealWorld, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (0, 0, 1)  # TODO: Create separate class for configuration space

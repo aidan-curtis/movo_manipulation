@@ -6,8 +6,8 @@ from pybullet_planning.pybullet_tools.utils import (create_box, BROWN,
 import pybullet as p
 
 class SidePath(Environment):
-    def __init__(self):
-        super(SidePath, self).__init__()
+    def __init__(self, **kwargs):
+        super(SidePath, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (6, 2, 0) # TODO: Create separate class for configuration space

@@ -10,8 +10,8 @@ import numpy as np
    
 
 class SubObs(Environment):
-    def __init__(self):
-        super(SubObs, self).__init__()
+    def __init__(self, **kwargs):
+        super(SubObs, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (5.4, -0.4, 0) # TODO: Create separate class for configuration space

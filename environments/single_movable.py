@@ -4,8 +4,8 @@ from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose,
 import pybullet as p
 
 class SingleMovable(Environment):
-    def __init__(self):
-        super(SingleMovable, self).__init__()
+    def __init__(self, **kwargs):
+        super(SingleMovable, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (6, 2, 0) # TODO: Create separate class for configuration space

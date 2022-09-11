@@ -9,8 +9,8 @@ import numpy as np
    
 
 class AttObs(Environment):
-    def __init__(self):
-        super(AttObs, self).__init__()
+    def __init__(self, **kwargs):
+        super(AttObs, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
         self.goal = (4, 0, round(np.pi, 3)) # TODO: Create separate class for configuration space
