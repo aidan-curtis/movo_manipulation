@@ -292,6 +292,9 @@ class Lamb(Planner):
 
         p_through_voxels = self.env.visibility_voxels_from_path(p_through, attachment=attachment)
 
+        # Sort poses for a bias towards closer poses
+        attachment_poses = sorted(attachment_poses, key=lambda x: distance(x, q_start))
+
         for attach_pose in attachment_poses:
             cached_movables = list(self.env.movable_boxes)
             v = set(v_0)
