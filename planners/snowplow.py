@@ -169,7 +169,7 @@ class Snowplow(Planner):
         return None
 
 
-    def action_fn(self, path, v_0, extended=set(), ignore_movable=False, attachment=None):
+    def action_fn(self, path, v_0, extended=None, ignore_movable=False, attachment=None):
         """
         Helper function to the search, that given a node, it gives all the possible actions to take with
         the inquired cost of each. Uses the vision constraint on each node based
@@ -181,6 +181,8 @@ class Snowplow(Planner):
         Returns:
             list: A list of available actions with the respective costs.
         """
+        if extended is None:
+            extended = set()
         actions = []
         q = path[-1]
         # Retrieve all the neighbors of the current node based on the graph of the space.

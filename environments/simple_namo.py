@@ -1,4 +1,4 @@
-from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT, GRID_RESOLUTION
 
 from pybullet_planning.pybullet_tools.utils import (create_box, TAN, BROWN, AABB,
                                                     set_pose, Pose, Point, LockRenderer,
@@ -15,7 +15,8 @@ class SimpleNamo(Environment):
         super(SimpleNamo, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
-        self.goal = (4, 0, 0)  # TODO: Create separate class for configuration space
+        self.goal = (4, 0, 0)
+        self.chair_pos = (2, 2.3, 0.42)
         self.objects = []
         self.viewed_voxels = []
 
@@ -28,11 +29,13 @@ class SimpleNamo(Environment):
         self.connect()
 
         with LockRenderer():
-            self.display_goal(self.goal)
             # These 3 lines are important and should be located here
             self.robot = self.setup_robot()
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
+
+            self.randomize_env()
+            self.display_goal(self.goal)
 
             self.joints = [joint_from_name(self.robot, "x"),
                            joint_from_name(self.robot, "y"),
@@ -45,9 +48,9 @@ class SimpleNamo(Environment):
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                      Pose(point=Point(
-                         x=2,
-                         y=2.3,
-                         z=0.42,
+                         x=self.chair_pos[0],
+                         y=self.chair_pos[1],
+                         z=self.chair_pos[2],
                      )
                      )
                      )
@@ -111,3 +114,21 @@ class SimpleNamo(Environment):
         room = Room(walls, floors, aabb, movable_obstacles)
 
         return room
+
+
+    def randomize_env(self):
+        i = np.random.randint(5)
+        self.start = (self.start[0],
+                      round(self.start[1] + i*GRID_RESOLUTION, 2),
+                      round(self.start[2] + np.random.randint(16)*np.pi/8, 3))
+
+        i = np.random.randint(0, 5)
+        self.goal = (self.goal[0],
+                     round(self.goal[1] + i*GRID_RESOLUTION, 2),
+                     round(self.goal[2] + np.random.randint(16)*np.pi/8, 3))
+
+        i = np.random.randint(-4, 5)
+        self.chair_pos = (self.chair_pos[0] + i*0.1,
+                          self.chair_pos[1],
+                          self.chair_pos[2])
+

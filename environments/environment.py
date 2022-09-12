@@ -110,22 +110,11 @@ class Environment(ABC):
                     collisions.append((q, attachment))
                     continue
 
-            # for wall in self.room.walls:
-            #     wall_aabb = get_aabb(wall)
-            #     if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
-            #         collisions.append((q, attachment))
-            #         break
-            #     if attachment is not None:
-            #         obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-            #         if aabb_overlap(wall_aabb, obj_aabb):
-            #             collisions.append((q, attachment))
-            #             break
-
             for obj in self.room.movable_obstacles:
                 if attachment is not None:
                     if attachment[2] == obj:
                         continue
-                object_aabb = scale_aabb(get_aabb(obj), 0.8)
+                object_aabb = scale_aabb(get_aabb(obj), 0.75)
                 if aabb_overlap(object_aabb, self.aabb_from_q(q)):
                     collisions.append((q, attachment))
                     break
@@ -771,6 +760,10 @@ class Environment(ABC):
         # Look for a random configuration and return it only if it is valid.
         while not good:
             rand_q = G.rand_vex(self)
+            # TODO: Get rid of restricting to floor 1. It just makes search faster for these envs.
+            if not aabb_contains_point(list(rand_q[:2]) + [0], get_aabb(self.room.floors[0])):
+                continue
+
             aabb = self.movable_object_oobb_from_q(coll_obj, rand_q, base_grasp).aabb
             if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
@@ -1049,13 +1042,14 @@ class Environment(ABC):
                 occupancy_points = points_from_occ
             else:
                 # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                occupancy_points = occupancy_points.reshape(-1, 3)
                 occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                           (occ_points_from_obs <= aabb.upper), axis=1)
-                if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
-                    occupancy_points = np.concatenate([occupancy_points,
-                                                      occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                occupancy_points = occupancy_points.reshape(-1, 3)
+                occupancy_points = np.concatenate([occupancy_points,
+                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
@@ -1067,14 +1061,15 @@ class Environment(ABC):
                     occupancy_points = points_from_occ
                 else:
                     # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                    occupancy_points = occupancy_points.reshape(-1, 3)
                     occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
 
                 if len(obstruction) > 0:
                     vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                               (occ_points_from_obs <= aabb.upper), axis=1)
-                    if occ_points_from_obs[vis_idx_from_obs].ndim == 1:
-                        occupancy_points = np.concatenate([occupancy_points,
-                                                           occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                    occupancy_points = occupancy_points.reshape(-1, 3)
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:
