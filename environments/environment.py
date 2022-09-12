@@ -110,17 +110,6 @@ class Environment(ABC):
                     collisions.append((q, attachment))
                     continue
 
-            # for wall in self.room.walls:
-            #     wall_aabb = get_aabb(wall)
-            #     if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
-            #         collisions.append((q, attachment))
-            #         break
-            #     if attachment is not None:
-            #         obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-            #         if aabb_overlap(wall_aabb, obj_aabb):
-            #             collisions.append((q, attachment))
-            #             break
-
             for obj in self.room.movable_obstacles:
                 if attachment is not None:
                     if attachment[2] == obj:

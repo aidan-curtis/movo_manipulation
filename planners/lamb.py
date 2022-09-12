@@ -62,6 +62,7 @@ class Lamb(Planner):
         """
         self.debug = debug
         self.current_q, q_goal = self.env.start, self.env.goal
+
         # Gets initial vision and updates the current vision based on it
         self.v_0 = self.env.get_circular_vision(self.current_q, self.G)
         self.env.update_vision_from_voxels(self.v_0)

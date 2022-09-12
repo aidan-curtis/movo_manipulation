@@ -10,8 +10,6 @@ from planners.rotate import Rotate
 from planners.do_nothing import DoNothing
 from environments.empty import Empty
 from environments.complex import Complex
-from environments.side_path import SidePath
-from environments.single_movable import SingleMovable
 from environments.simple_navigation import SimpleNavigation
 from environments.attach_obstructed import AttObs
 from environments.subgoal_obstructed import SubObs
@@ -23,6 +21,7 @@ from datetime import datetime
 import os
 import time
 import random
+import numpy as np
 
 PLANNERS = {"snowplow": Snowplow,
             "a_star": AStarSearch,
@@ -35,8 +34,6 @@ PLANNERS = {"snowplow": Snowplow,
 
 ENVIRONMENTS = {"empty": Empty,
                 "complex": Complex, 
-                "side_path": SidePath,
-                "single_movable": SingleMovable,
                 "simple_navigation": SimpleNavigation,
                 "attachment_obstructed": AttObs,
                 "subgoal_obstructed": SubObs,
@@ -116,6 +113,7 @@ def write_results(args, statistics, save_dir):
 if __name__=="__main__":
     args = get_args()
     random.seed(args.seed)
+    np.random.seed(args.seed)
     env = ENVIRONMENTS[args.env](vis=args.vis)
     planner = PLANNERS[args.algo](env)
     start_time = time.time()
