@@ -1,7 +1,7 @@
 #!/bin/sh
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task 4
-#SBATCH --time=03:00:00
+#SBATCH --cpus-per-task 8
+#SBATCH --time=12:00:00
 
 i=1
 for env in "simple_navigation" "simple_vision" "simple_namo" "complex" "subgoal_obstructed" "attachment_obstructed"

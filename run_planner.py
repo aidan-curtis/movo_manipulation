@@ -112,6 +112,10 @@ def write_results(args, statistics, save_dir):
 
 if __name__=="__main__":
     args = get_args()
+
+    print("=================")
+    print(args)
+    
     random.seed(args.seed)
     np.random.seed(args.seed)
     env = ENVIRONMENTS[args.env](vis=args.vis)

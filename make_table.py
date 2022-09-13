@@ -16,8 +16,8 @@ env_name_map = {
     "Simple Navigation": "simple_navigation",
     "Visibility":"simple_vision",
     "Movable Obstacles": "simple_namo",
-    "Obstructed Visibility": "complex",
-    "Occluding Obstacles": "subgoal_obstructed",
+    "Obstructed Visibility": "subgoal_obstructed",
+    "Occluding Obstacles": "complex",
     "Obstructed Affordance": "attachment_obstructed"
 }
 
