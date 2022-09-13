@@ -95,8 +95,7 @@ def get_args():
     parser.add_argument(
         "-d",
         "--debug",
-        type=str,
-        default="False",
+        action="store_true",
         help="Whether to enter in debugging mode"
     )
 
@@ -126,11 +125,12 @@ if __name__=="__main__":
 
     random.seed(args.seed)
     np.random.seed(args.seed)
-    env = ENVIRONMENTS[args.env](vis=args.vis)
+
+    env = ENVIRONMENTS[args.env](vis=args.vis, debug=args.debug, save_dir = args.save_dir)
     planner = PLANNERS[args.algo](env)
     start_time = time.time()
     if(args.only_validate is None):
-        plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+        plan = planner.get_plan(loadfile=args.load, debug=args.debug)
     else:
         with open(args.only_validate, 'rb') as handle:
             data = pickle.load(handle)

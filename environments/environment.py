@@ -11,15 +11,16 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_from_points, OOBB,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection, get_joint_positions,
-                                                    get_aabb_volume, load_model, get_link_names, get_all_links,
-                                                    wait_if_gui, BLACK)
+                                                    get_aabb_volume, load_model, get_link_names, 
+                                                    get_all_links, BLACK)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.graph import Graph
 from utils.motion_planning_interface import DEFAULT_JOINTS
-from utils.utils import iterate_point_cloud
+from utils.utils import iterate_point_cloud, save_camera_images
 import pybullet as p
 import os
 import numpy as np
+import time
 from collections import namedtuple, defaultdict
 import functools
 from scipy.spatial.transform import Rotation as R
@@ -68,9 +69,11 @@ def suppress_stdout():
 
 class Environment(ABC):
 
-    def __init__(self, vis=True):
+    def __init__(self, vis=True, debug=False, save_dir = False):
         self.vis = vis
         self.push_only = []
+        self.debug = debug
+        self.save_dir = save_dir
 
     def restrict_configuration(self, G):
         return
@@ -1211,6 +1214,9 @@ class Environment(ABC):
         camera_pose = get_link_pose(self.robot, camera_link)
 
         camera_image = get_image_at_pose(camera_pose, CAMERA_MATRIX, far=FAR, segment=True)
+        if(self.debug):
+            save_camera_images(camera_image.rgbPixels, camera_image.depthPixels, camera_image.segmentationMaskBuffer,\
+                                 prefix=str(time.time()), directory=self.save_dir)
 
         return camera_pose, camera_image
 
