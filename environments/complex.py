@@ -22,6 +22,7 @@ class Complex(Environment):
 
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
+        self.initialized = False
 
 
     def setup(self):
@@ -35,7 +36,8 @@ class Complex(Environment):
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
 
-            self.randomize_env()
+            if not self.initialized:
+                self.randomize_env()
             self.display_goal(self.goal)
             blocking_chair = self.add_chair()
 
@@ -139,5 +141,7 @@ class Complex(Environment):
         self.chair_pos = (self.chair_pos[0] + i*0.1,
                           self.chair_pos[1],
                           self.chair_pos[2])
+
+        self.initialized = True
 
 

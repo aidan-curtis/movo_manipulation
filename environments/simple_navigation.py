@@ -14,6 +14,8 @@ class SimpleNavigation(Environment):
         self.objects = []
         self.viewed_voxels = []
 
+        self.initialized = False
+
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
 
@@ -30,7 +32,8 @@ class SimpleNavigation(Environment):
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
 
-            self.randomize_env()
+            if not self.initialized:
+                self.randomize_env()
             self.display_goal(self.goal)
 
             self.joints = [joint_from_name(self.robot, "x"),
@@ -87,4 +90,6 @@ class SimpleNavigation(Environment):
         self.goal = (self.goal[0],
                      round(self.goal[1] + i*GRID_RESOLUTION, 2),
                      self.goal[2])
+
+        self.initialized = True
 
