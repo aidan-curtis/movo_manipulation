@@ -69,6 +69,14 @@ def get_args():
     )
 
     parser.add_argument(
+        "-ov",
+        "--only_validate",
+        type=str,
+        default=None,
+        help="Filename of the plan to run validation on"
+    )
+
+    parser.add_argument(
         "-l",
         "--load",
         type=str,
@@ -115,13 +123,19 @@ if __name__=="__main__":
 
     print("=================")
     print(args)
-    
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     env = ENVIRONMENTS[args.env](vis=args.vis)
     planner = PLANNERS[args.algo](env)
     start_time = time.time()
-    plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+    if(args.only_validate is None):
+        plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+    else:
+        with open(args.only_validate, 'rb') as handle:
+            data = pickle.load(handle)
+            plan = data["plan"]
+
     plan_time = time.time()-start_time
     print(plan)
     wait_if_gui()
