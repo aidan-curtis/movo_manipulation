@@ -6,10 +6,32 @@ from pybullet_planning.pybullet_tools.voxels import MAX_PIXEL_VALUE
 from collections import namedtuple
 
 from pybullet_planning.pybullet_tools.utils import (dimensions_from_camera_matrix, ray_from_pixel, 
-                                                create_mesh, Pose, link_from_name,
-                                                get_all_links, tform_point, add_line)
-
+                                                create_mesh, Pose, image_from_segmented,
+                                                save_image, tform_point, add_line)
+import os
 LabeledPoint = namedtuple("LabeledPoint", ["point", "color", "label"])
+
+
+def save_camera_images(rgb_image, depth_image, seg_image, directory="./images_tmp", prefix=""):
+    rgb_fn = os.path.join(directory, "{}rgb.png".format(prefix))
+    save_image(
+        rgb_fn, rgb_image
+    )  # [0, 255]
+
+    depth_fn = os.path.join(directory, "{}depth.png".format(prefix))
+    save_image(
+        depth_fn, depth_image
+    )  # [0, 1]
+    if seg_image is None:
+        return None
+ 
+    segmented_image = image_from_segmented(seg_image)
+    seg_fn = os.path.join(directory, "{}segmented.png".format(prefix))
+    save_image(
+        seg_fn, segmented_image
+    )  # [0, 255]
+
+    return rgb_fn, depth_fn, seg_fn
 
 
 def get_pointcloud_from_camera_image(camera_image):

@@ -1,4 +1,4 @@
-from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY, GRID_RESOLUTION
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
                                                     load_model, TAN, RED,
                                                     LockRenderer, AABB, get_aabb, joint_from_name,
@@ -14,7 +14,8 @@ class SubObs(Environment):
         super(SubObs, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
-        self.goal = (5.4, -0.4, 0) # TODO: Create separate class for configuration space
+        self.goal = (5.4, -0.4, 0)
+        self.chair_pos = (4, 3.5, 0.42)
 
 
         self.objects = []
@@ -22,6 +23,7 @@ class SubObs(Environment):
 
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
+        self.initialized = False
 
     def setup(self):
 
@@ -30,11 +32,14 @@ class SubObs(Environment):
 
         with LockRenderer():
 
-            self.display_goal(self.goal)
             # These 3 lines are important and should be located here
             self.robot = self.setup_robot()
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
+
+            if not self.initialized:
+                self.randomize_env()
+            self.display_goal(self.goal)
 
             self.joints = [joint_from_name(self.robot, "x"),
                         joint_from_name(self.robot, "y"),
@@ -48,9 +53,9 @@ class SubObs(Environment):
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
-                        x=4,
-                        y=3.5,
-                        z=0.42,
+                    x=self.chair_pos[0],
+                    y=self.chair_pos[1],
+                    z=self.chair_pos[2],
                     )
                 )
             )
@@ -101,14 +106,14 @@ class SubObs(Environment):
                  Pose(point=Point(y=center[1], x=-0.95, z=wall_height / 2)))
 
         # Dividing wall
-        wall_5 = self.create_pillar(length=3.9, width=wall_thickness, height=wall_height, color=LIGHT_GREY)
+        wall_5 = self.create_pillar(length=3.9, width=wall_thickness*2, height=wall_height, color=LIGHT_GREY)
         set_pose(wall_5,
                  Pose(point=Point(y=0.95, x=3, z=wall_height / 2)))
 
         # Miniature wall
         wall_6 = self.create_pillar(length=5.1, width=wall_thickness, height=0.7, color=LIGHT_GREY)
         set_pose(wall_6,
-                 Pose(point=Point(y=1.55, x=4.75, z=0.351)))
+                 Pose(point=Point(y=1.55, x=4.749, z=0.351)))
 
         wall_7 = self.create_pillar(length=5.1, width=wall_thickness, height=0.39, color=LIGHT_GREY)
         set_pose(wall_7,
@@ -122,3 +127,22 @@ class SubObs(Environment):
         room = Room(walls, floors, aabb, movable_obstacles)
 
         return room
+
+    def randomize_env(self):
+        i = np.random.randint(6)
+        e = np.random.randint(6)
+        self.start = (round(self.start[0] + i*GRID_RESOLUTION, 2),
+                      round(self.start[1] + e*GRID_RESOLUTION, 2),
+                      round(self.start[2] + np.random.randint(16)*np.pi/8, 3))
+
+        i = np.random.randint(0, 3)
+        self.goal = (self.goal[0],
+                     round(self.goal[1] - i*GRID_RESOLUTION, 2),
+                     self.goal[2])
+
+        i = np.random.randint(-5, 0)
+        self.chair_pos = (self.chair_pos[0],
+                          self.chair_pos[1] + i*0.2,
+                          self.chair_pos[2])
+
+        self.initialized = True

@@ -12,15 +12,16 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_from_points, OOBB,
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection, get_joint_positions,
-                                                    get_aabb_volume, load_model, get_link_names, get_all_links,
-                                                    wait_if_gui, BLACK)
+                                                    get_aabb_volume, load_model, get_link_names, 
+                                                    get_all_links, BLACK, wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.graph import Graph
 from utils.motion_planning_interface import DEFAULT_JOINTS
-from utils.utils import iterate_point_cloud
+from utils.utils import iterate_point_cloud, save_camera_images
 import pybullet as p
 import os
 import numpy as np
+import time
 from collections import namedtuple, defaultdict
 import functools
 from scipy.spatial.transform import Rotation as R
@@ -42,8 +43,7 @@ fy = 80
 CAMERA_WIDTH = 128
 CAMERA_HEIGHT = 128
 CAMERA_MATRIX = get_camera_matrix(CAMERA_WIDTH, CAMERA_HEIGHT, fx, fy)
-FAR = 3
-
+FAR = 20
 
 @contextmanager
 def suppress_stdout():
@@ -69,10 +69,13 @@ def suppress_stdout():
 
 class Environment(ABC):
 
-    def __init__(self, vis=True, cloud_vis=False, **kwargs):
+    def __init__(self, vis=True,  cloud_vis=False, debug=False, save_dir = False):
+
         self.vis = vis
         self.cloud_vis = cloud_vis
         self.push_only = []
+        self.debug = debug
+        self.save_dir = save_dir
 
     def restrict_configuration(self, G):
         return
@@ -119,22 +122,11 @@ class Environment(ABC):
                     collisions.append((q, attachment))
                     continue
 
-            # for wall in self.room.walls:
-            #     wall_aabb = get_aabb(wall)
-            #     if aabb_overlap(wall_aabb, self.aabb_from_q(q)):
-            #         collisions.append((q, attachment))
-            #         break
-            #     if attachment is not None:
-            #         obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
-            #         if aabb_overlap(wall_aabb, obj_aabb):
-            #             collisions.append((q, attachment))
-            #             break
-
             for obj in self.room.movable_obstacles:
                 if attachment is not None:
                     if attachment[2] == obj:
                         continue
-                object_aabb = scale_aabb(get_aabb(obj), 0.8)
+                object_aabb = scale_aabb(get_aabb(obj), 0.75)
                 if aabb_overlap(object_aabb, self.aabb_from_q(q)):
                     collisions.append((q, attachment))
                     break
@@ -780,6 +772,10 @@ class Environment(ABC):
         # Look for a random configuration and return it only if it is valid.
         while not good:
             rand_q = G.rand_vex(self)
+            # TODO: Get rid of restricting to floor 1. It just makes search faster for these envs.
+            if not aabb_contains_point(list(rand_q[:2]) + [0], get_aabb(self.room.floors[0])):
+                continue
+
             aabb = self.movable_object_oobb_from_q(coll_obj, rand_q, base_grasp).aabb
             if aabb_overlap(aabb, self.aabb_from_q(rand_q)):
                 continue
@@ -1058,15 +1054,14 @@ class Environment(ABC):
                 occupancy_points = points_from_occ
             else:
                 # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                occupancy_points = occupancy_points.reshape(-1, 3)
                 occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
             if len(obstruction) > 0:
                 vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                           (occ_points_from_obs <= aabb.upper), axis=1)
-                if occupancy_points.ndim == 1:
-                    occupancy_points = occ_points_from_obs[vis_idx_from_obs]
-                else:
-                    occupancy_points = np.concatenate([occupancy_points,
-                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                occupancy_points = occupancy_points.reshape(-1, 3)
+                occupancy_points = np.concatenate([occupancy_points,
+                                                    occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             if attachment is not None:
                 aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
@@ -1078,16 +1073,15 @@ class Environment(ABC):
                     occupancy_points = points_from_occ
                 else:
                     # occupancy_points = np.concatenate([occupancy_points, occ_points[vis_idx]], axis=0)
+                    occupancy_points = occupancy_points.reshape(-1, 3)
                     occupancy_points = np.concatenate([occupancy_points, points_from_occ], axis=0)
 
                 if len(obstruction) > 0:
                     vis_idx_from_obs = np.all((aabb.lower <= occ_points_from_obs) &
                                               (occ_points_from_obs <= aabb.upper), axis=1)
-                    if occupancy_points.ndim == 1:
-                        occupancy_points = occ_points_from_obs[vis_idx_from_obs]
-                    else:
-                        occupancy_points = np.concatenate([occupancy_points,
-                                                           occ_points_from_obs[vis_idx_from_obs]], axis=0)
+                    occupancy_points = occupancy_points.reshape(-1, 3)
+                    occupancy_points = np.concatenate([occupancy_points,
+                                                       occ_points_from_obs[vis_idx_from_obs]], axis=0)
 
             # Check for collision with movable
             if not ignore_movable and movable_coll is None:
@@ -1230,6 +1224,9 @@ class Environment(ABC):
         camera_pose = get_link_pose(self.robot, camera_link)
 
         camera_image = get_image_at_pose(camera_pose, CAMERA_MATRIX, far=FAR, segment=True)
+        if(self.debug):
+            save_camera_images(camera_image.rgbPixels, camera_image.depthPixels, camera_image.segmentationMaskBuffer,\
+                                 prefix=str(time.time()), directory=self.save_dir)
 
         return camera_pose, camera_image
 

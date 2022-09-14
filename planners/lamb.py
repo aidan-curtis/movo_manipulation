@@ -62,6 +62,7 @@ class Lamb(Planner):
         """
         self.debug = debug
         self.current_q, q_goal = self.env.start, self.env.goal
+
         # Gets initial vision and updates the current vision based on it
         self.v_0 = self.env.get_circular_vision(self.current_q, self.G)
         self.env.update_vision_from_voxels(self.v_0)
@@ -378,21 +379,22 @@ class Lamb(Planner):
             list: The suggested path that views some of the area of interest.
         """
         # Try visualizing the area of interest keeping the vision constraint.
-        p_vis = self.tourist(q, R, v, obstructions=obstructions, enforced_obstacles=enforced_obstacles,
+        obstructions_new = obstructions.union(R)
+        p_vis = self.tourist(q, R, v, obstructions=obstructions_new, enforced_obstacles=enforced_obstacles,
                              wrong_placements=wrong_placements)
         if p_vis is not None:
             return p_vis
         # If it can't view the area, find a relaxed path that does the same and make this new path
         # the new subgoal. Call the function recursively.
-        obstructions_new = obstructions.union(R)
-        p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new,
-                                 enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
-        if p_relaxed is not None:
-            p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v,
-                              obstructions=obstructions_new, enforced_obstacles=enforced_obstacles,
-                              wrong_placements=wrong_placements)
-            if p_vis is not None:
-                return p_vis
+        # obstructions_new = obstructions.union(R)
+        # p_relaxed = self.tourist(q, R, v, relaxed=True, obstructions=obstructions_new,
+        #                          enforced_obstacles=enforced_obstacles, wrong_placements=wrong_placements)
+        # if p_relaxed is not None:
+        #     p_vis = self.vavp(q, self.env.visibility_voxels_from_path(p_relaxed).difference(v), v,
+        #                       obstructions=obstructions_new, enforced_obstacles=enforced_obstacles,
+        #                       wrong_placements=wrong_placements)
+        #     if p_vis is not None:
+        #         return p_vis
         return None
 
     def tourist(self, q_start, R, v_0, q_goal=None, relaxed=False, obstructions=set(), ignore_movable=False,
@@ -497,7 +499,7 @@ class Lamb(Planner):
                     else:
                         # cost = distance(q, q_prime) *\
                         #         abs(self.volume_from_voxels(self.env.static_vis_grid, s_q.difference(v_q)))
-                        cost = distance(q, q_prime) * len(s_q.difference(v_q))
+                        cost = distance(q, q_prime) * (len(s_q.difference(v_q))+1)
                         actions.append((q_prime, cost))
             else:
                 # In the not relaxed case only add nodes when the visibility constraint holds.
@@ -650,7 +652,6 @@ class Lamb(Planner):
                 coll_obj = self.env.get_movable_box_from_aabb(obj_aabb)
                 # Compute the grasp transform of the attachment.
                 base_pose = Pose(point=Point(x=q[0], y=q[1]), euler=Euler(yaw=q[2]), )
-                #obj_pose = Pose(point=get_aabb_center(coll_obj.aabb))
                 obj_pose = get_pose(obj)
                 current_grasp = multiply(invert(base_pose), obj_pose)
                 attachment = [coll_obj, current_grasp, obj]
@@ -696,6 +697,24 @@ class Lamb(Planner):
                 if attachment is not None:
                     oobb = self.env.movable_object_oobb_from_q(attachment[0], q, attachment[1])
                     self.env.movable_boxes.append(oobb)
+                # If the current q is in collision with movable due to expansion of aabb in
+                # last step or an intermediate configuration. Then backtrack to the
+                # last step on the already executed path where this does not happen.
+                _, collided_obj = self.find_obstruction_ahead([(q, None)], None)
+                while collided_obj is not None:
+                    qi -= 1
+                    q = path[qi][0]
+                    if attachment is not None:
+                        self.env.remove_movable_object(oobb)
+
+                    self.env.move_robot(q, self.joints, attachment=attachment)
+                    executed.append([q, attachment])
+
+                    if attachment is not None:
+                        oobb = self.env.movable_object_oobb_from_q(attachment[0], q, attachment[1])
+                        self.env.movable_boxes.append(oobb)
+                    _, collided_obj = self.find_obstruction_ahead([(q, None)], None)
+
                 return q, False, gained_vision, executed
             self.env.plot_grids(visibility=True, occupancy=True, movable=True)
 

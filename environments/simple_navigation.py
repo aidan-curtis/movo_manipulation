@@ -1,5 +1,6 @@
-from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
-from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, Point, LockRenderer)
+from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT, GRID_RESOLUTION
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, Point, LockRenderer, set_joint_positions,
+                                                    joint_from_name)
 import pybullet as p
 import numpy as np
 
@@ -9,9 +10,11 @@ class SimpleNavigation(Environment):
         super(SimpleNavigation, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
-        self.goal = (2.2, 0, round(3*np.pi/2, 3))  # TODO: Create separate class for configuration space
+        self.goal = (2.2, 0, round(3*np.pi/2, 3))
         self.objects = []
         self.viewed_voxels = []
+
+        self.initialized = False
 
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
@@ -22,13 +25,21 @@ class SimpleNavigation(Environment):
         self.connect()
 
         with LockRenderer():
-            self.display_goal(self.goal)
             self.robot = self.setup_robot()
             self.room = self.create_room()
             self.static_objects = []
             self.setup_grids()
             self.centered_aabb = self.get_centered_aabb()
             self.centered_oobb = self.get_centered_oobb()
+
+            if not self.initialized:
+                self.randomize_env()
+            self.display_goal(self.goal)
+
+            self.joints = [joint_from_name(self.robot, "x"),
+                           joint_from_name(self.robot, "y"),
+                           joint_from_name(self.robot, "theta")]
+            set_joint_positions(self.robot, self.joints, self.start)
 
     def create_room(self, movable_obstacles=[]):
         width = 4
@@ -68,3 +79,17 @@ class SimpleNavigation(Environment):
         room = Room(walls, floors, aabb, movable_obstacles)
 
         return room
+
+    def randomize_env(self):
+        i = np.random.randint(-1, 4, size=2)
+        self.start = (round(self.start[0] + i[0]*GRID_RESOLUTION, 2),
+                      round(self.start[1] + i[1]*GRID_RESOLUTION, 2),
+                      round(self.start[2] + np.random.randint(16)*np.pi/8, 3))
+
+        i = np.random.randint(-1, 5)
+        self.goal = (self.goal[0],
+                     round(self.goal[1] + i*GRID_RESOLUTION, 2),
+                     self.goal[2])
+
+        self.initialized = True
+

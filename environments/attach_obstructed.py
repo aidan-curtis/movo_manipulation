@@ -1,7 +1,7 @@
-from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY
+from environments.environment import Environment, Room, GRID_HEIGHT, LIGHT_GREY, GRID_RESOLUTION
 from pybullet_planning.pybullet_tools.utils import (set_pose, set_joint_position, Pose, Point,
                                                     load_model, create_box, TAN, BROWN,
-                                                    LockRenderer, AABB, get_aabb)
+                                                    LockRenderer, AABB, get_aabb, joint_from_name, set_joint_positions)
 import random
 import math
 import pybullet as p
@@ -13,13 +13,15 @@ class AttObs(Environment):
         super(AttObs, self).__init__(**kwargs)
 
         self.start = (0, 0, 0)
-        self.goal = (4, 0, round(np.pi, 3)) # TODO: Create separate class for configuration space
+        self.goal = (4, 0, round(np.pi, 3))
+        self.chair_pos = (2, 1.2, 0.42)
 
         self.objects = []
         self.viewed_voxels = []
 
         # Properties represented as a list of width, length, height, mass
         self.objects_prop = dict()
+        self.initialized = False
 
     def setup(self):
 
@@ -27,8 +29,19 @@ class AttObs(Environment):
         self.connect()
         
         with LockRenderer():
-            self.display_goal(self.goal)
+            # These 3 lines are important and should be located here
             self.robot = self.setup_robot()
+            self.centered_aabb = self.get_centered_aabb()
+            self.centered_oobb = self.get_centered_oobb()
+
+            if not self.initialized:
+                self.randomize_env()
+            self.display_goal(self.goal)
+
+            self.joints = [joint_from_name(self.robot, "x"),
+                           joint_from_name(self.robot, "y"),
+                           joint_from_name(self.robot, "theta")]
+            set_joint_positions(self.robot, self.joints, self.start)
 
             blocking_chair = self.add_chair()
             blocking_box = create_box(1, 1.5, 1, mass=1, color=BROWN)
@@ -36,9 +49,9 @@ class AttObs(Environment):
             set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
             set_pose(blocking_chair,
                 Pose(point=Point(
-                        x=2,
-                        y=1.2,
-                        z=0.42,
+                    x=self.chair_pos[0],
+                    y=self.chair_pos[1],
+                    z=self.chair_pos[2],
                     )
                 )
             )
@@ -57,9 +70,8 @@ class AttObs(Environment):
             self.objects += [blocking_box, blocking_chair]
             self.push_only = [blocking_box]
             self.static_objects = []
-            self.centered_aabb = self.get_centered_aabb()
-            self.centered_oobb = self.get_centered_oobb()
             self.setup_grids()
+
 
 
     def create_room(self, movable_obstacles=[]):
@@ -114,3 +126,26 @@ class AttObs(Environment):
         room = Room(walls, floors, aabb, movable_obstacles)
 
         return room
+
+
+
+    def randomize_env(self):
+        i = np.random.randint(3)
+        e = np.random.randint(-5, 6)
+        self.start = (round(self.start[0] + i*GRID_RESOLUTION, 2),
+                      round(self.start[1] + e*GRID_RESOLUTION, 2),
+                      round(self.start[2] + np.random.randint(16)*np.pi/8, 3))
+
+        i = np.random.randint(0, 3)
+        self.goal = (round(self.goal[0] - i*GRID_RESOLUTION, 2),
+                     self.goal[1],
+                     self.goal[2])
+
+        i = np.random.randint(-5, 2)
+        self.chair_pos = (self.chair_pos[0] + i*0.1,
+                          self.chair_pos[1],
+                          self.chair_pos[2])
+
+        self.initialized = True
+
+
