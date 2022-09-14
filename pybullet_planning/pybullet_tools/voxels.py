@@ -10,6 +10,7 @@ from .utils import (
     CLIENT,
     NULL_ID,
     OOBB,
+    RGBA,
     STATIC_MASS,
     TEMP_DIR,
     LockRenderer,
@@ -73,6 +74,7 @@ class VoxelGrid(object):
         aabb=None,
         client=None,
         color=(1, 0, 0, 0.5),
+        cloud_vis=False,
         **kwargs
     ):
         # def __init__(self, sizes, centers, pose=unit_pose()):
@@ -88,8 +90,15 @@ class VoxelGrid(object):
         self.client = client
         self.occupied_points = []
         self.occupied_voxel_points = []
+        self.cloud_vis = cloud_vis
+        self.cloud_handles = []
+        
         # self.bodies = None
         # TODO: store voxels more intelligently spatially
+
+    def clear_cloud(self):
+        for cloud_handle in self.cloud_handles:
+            remove_body(cloud_handle)
 
     def get_frontier(self):
         twod = self.project2d()
@@ -479,9 +488,14 @@ class VoxelGrid(object):
                         for extrema in self.aabb_from_voxel(voxel)
                     ]
                 )
-                handles.extend(
-                    draw_oobb(OOBB(aabb, self.world_from_grid), color=self.color[:3], client=self.client)
-                )
+                if(self.cloud_vis):
+                    self.cloud_handles.extend(
+                        draw_cloud_oobb(OOBB(aabb, self.world_from_grid), color=self.color[:3], client=self.client)
+                    )
+                else:
+                    handles.extend(
+                        draw_oobb(OOBB(aabb, self.world_from_grid), color=self.color[:3], client=self.client)
+                    )
             return handles
 
     def draw_vertical_lines(self):
@@ -575,6 +589,21 @@ def set_texture(texture, image):
     # b3Printf: uploadBulletFileToSharedMemory 747003 exceeds max size 524288
     p.changeTexture(texture, pixels, width, height, physicsClientId=CLIENT)
     # TODO: it's important that width and height are the same as the original
+
+def draw_cloud_oobb(oobb, origin=False, color=None, **kwargs):
+    print("draw cloud oobb")
+    aabb, pose = oobb
+    print(aabb)
+    print(pose)
+    CLOUD_HEIGHT =1.5
+    color = RGBA(color[0], color[1], color[2], 0.1)
+    collision_id, visual_id = create_shape(
+        get_box_geometry(aabb.upper[0]-aabb.lower[0], aabb.upper[1]-aabb.lower[1],  CLOUD_HEIGHT), color=color
+    )
+    body = create_body(collision_id, visual_id, mass=0, **kwargs)
+    set_pose(body, Pose([  (aabb.upper[0]+aabb.lower[0])/2.0, (aabb.upper[1]+aabb.lower[1])/2.0,  CLOUD_HEIGHT/2.0  ], [0,0,0]))
+    return [body]
+
 
 
 def rgb_interpolate(grey_image, min_color, max_color):

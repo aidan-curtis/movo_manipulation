@@ -80,6 +80,21 @@ def get_args():
     )
 
     parser.add_argument(
+        "-val",
+        "--validate",
+        type=str,
+        default=None,
+        help="Data file indicating saved state"
+    )
+
+    parser.add_argument(
+        "-cloud_vis",
+        "--cloud_vis",
+        action="store_true",
+        help="View the visibility as a cloud of semi-transparent blocks instead of a wireframe grid. Only to be used with interactive validation"
+    )
+
+    parser.add_argument(
         "-s",
         "--save_dir",
         type=str,
@@ -113,17 +128,28 @@ def write_results(args, statistics, save_dir):
     with open(results_fn, 'wb') as handle:
         pickle.dump(statistics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+def read_results(args):
+    with open(args.validate, 'rb') as handle:
+        data = pickle.load(handle)
+        return data["plan"]
+
 if __name__=="__main__":
     args = get_args()
     random.seed(args.seed)
-    env = ENVIRONMENTS[args.env](vis=args.vis)
-    planner = PLANNERS[args.algo](env)
-    start_time = time.time()
-    plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
-    plan_time = time.time()-start_time
-    print(plan)
-    wait_if_gui()
-    statistics = env.validate_plan(plan)
+    env = ENVIRONMENTS[args.env](vis=args.vis, cloud_vis=args.cloud_vis)
+
+    if(args.validate is None):
+        planner = PLANNERS[args.algo](env)
+        start_time = time.time()
+        plan = planner.get_plan(loadfile=args.load, debug=args.debug.lower() == "true")
+        plan_time = time.time()-start_time
+        print(plan)
+        wait_if_gui()
+    else:
+        plan_time = 0
+        plan = read_results(args)
+
+    statistics = env.validate_plan(plan, interactive = args.validate is not None)
 
     print(statistics)
     if(args.vis):

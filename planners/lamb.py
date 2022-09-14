@@ -135,6 +135,7 @@ class Lamb(Planner):
         Returns:
             list: A suggested plan for the robot to follow.
         """
+        print("Inside lamb")
         p = []
         v = set(v_0)
         q = q_start

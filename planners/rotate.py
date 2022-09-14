@@ -10,7 +10,7 @@ class Rotate(Planner):
     def __init__(self, env):
         super(Rotate, self).__init__()
         self.env = env
-            
+
     def get_plan(self, **kwargs):
         self.env.setup()
    

@@ -1,3 +1,4 @@
+from concurrent.futures import wait
 import random
 
 from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet,
@@ -68,8 +69,9 @@ def suppress_stdout():
 
 class Environment(ABC):
 
-    def __init__(self, vis=True):
+    def __init__(self, vis=True, cloud_vis=False, **kwargs):
         self.vis = vis
+        self.cloud_vis = cloud_vis
         self.push_only = []
 
     def restrict_configuration(self, G):
@@ -79,7 +81,7 @@ class Environment(ABC):
         return get_joint_positions(self.robot, joints)
 
 
-    def validate_plan(self, plan):
+    def validate_plan(self, plan, interactive=False):
         self.setup()
         G = Graph()
         G.initialize_full_graph(self, [GRID_RESOLUTION, GRID_RESOLUTION, np.pi / 8])
@@ -87,16 +89,23 @@ class Environment(ABC):
         v_0 = self.get_circular_vision(plan[0][0], G)
         self.update_vision_from_voxels(v_0)
         collisions = []
+
+        if(interactive):
+            self.display_goal(self.goal, display=True)
         # TODO change how intersections with walls are found, right now it
         # finds collisions easily because of how we check the collisions with the voxels
-        for wall in self.room.walls:
-            for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(get_aabb(wall), 0.98)):
-                self.occupancy_grid.set_occupied(voxel)
+        # for wall in self.room.walls:
+        #     for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(get_aabb(wall), 0.98)):
+        #         self.occupancy_grid.set_occupied(voxel)
 
         for q, attachment in plan:
+            if(interactive):
+                wait_if_gui()
             self.move_robot(q, self.joints, attachment)
             camera_pose, image_data = self.get_robot_vision()
             self.update_visibility(camera_pose, image_data, q)
+            self.update_occupancy(camera_pose, image_data, q)
+
             if attachment is None:
                 self.update_movable_boxes(image_data)
             self.plot_grids(visibility=True, occupancy=True)
@@ -355,12 +364,12 @@ class Environment(ABC):
         """
         resolutions = GRID_RESOLUTION * np.ones(3)
         surface_origin = Pose(Point(z=0.01))
-        surface_aabb = AABB(lower=self.room.aabb.lower+np.array([-1, -1, 0]),
-                            upper=(self.room.aabb.upper[0]+1, self.room.aabb.upper[1]+1, GRID_RESOLUTION))
+        surface_aabb = AABB(lower=self.room.aabb.lower+np.array([0, 0, 0]),
+                            upper=(self.room.aabb.upper[0]+0, self.room.aabb.upper[1]+0, GRID_RESOLUTION))
         # Defines two grids, one for visualization, and a second one for keeping track of regions during
         # planning.
         grid = VoxelGrid(
-            resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE
+            resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLUE, cloud_vis=self.cloud_vis
         )
         static_grid = VoxelGrid(
             resolutions, world_from_grid=surface_origin, aabb=surface_aabb, color=BLACK
@@ -1199,6 +1208,7 @@ class Environment(ABC):
             with LockRenderer():
                 p.removeAllUserDebugItems()
                 if visibility:
+                    self.visibility_grid.clear_cloud()
                     self.visibility_grid.draw_intervals()
                 if occupancy:
                     self.occupancy_grid.draw_intervals()
