@@ -1,7 +1,7 @@
 from concurrent.futures import wait
 import random
 
-from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, load_pybullet,
+from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_cylinder, joints_from_names, load_pybullet,
                                                     set_joint_positions, joint_from_name,
                                                     Point, Pose, Euler,
                                                     set_pose, create_box, TAN, get_link_pose,
@@ -13,10 +13,11 @@ from pybullet_planning.pybullet_tools.utils import (GREEN, LockRenderer, create_
                                                     aabb_union, aabb_overlap, scale_aabb, get_aabb_center,
                                                     draw_aabb, aabb_intersection, get_joint_positions,
                                                     get_aabb_volume, load_model, get_link_names, 
-                                                    get_all_links, BLACK, wait_if_gui)
+                                                    get_all_links, BLACK, wait_for_user, wait_if_gui)
 from pybullet_planning.pybullet_tools.voxels import (VoxelGrid)
 from utils.graph import Graph
-from utils.motion_planning_interface import DEFAULT_JOINTS
+from utils.motion_planning_interface import DEFAULT_JOINTS, LEFT_ATTACH_CONF, RIGHT_ATTACH_CONF, \
+    LEFT_ARM_JOINT_NAMES, RIGHT_ARM_JOINT_NAMES
 from utils.utils import iterate_point_cloud, save_camera_images
 import pybullet as p
 import os
@@ -103,19 +104,42 @@ class Environment(ABC):
 
         for q, attachment in plan:
             if(interactive):
-                wait_if_gui()
+                should_plot = wait_for_user("Plot?")
             self.move_robot(q, self.joints, attachment)
+            LEFT_NON_ATTACH = [DEFAULT_JOINTS[j] for j in LEFT_ARM_JOINT_NAMES]
+            RIGHT_NON_ATTACH = [DEFAULT_JOINTS[j] for j in RIGHT_ARM_JOINT_NAMES]
+            
+            left_arm_joints = joints_from_names(self.robot, LEFT_ARM_JOINT_NAMES)
+            right_arm_joints = joints_from_names(self.robot, RIGHT_ARM_JOINT_NAMES)
+            set_joint_positions(self.robot, left_arm_joints, LEFT_NON_ATTACH)
+            set_joint_positions(self.robot, right_arm_joints, RIGHT_NON_ATTACH)
+            
             camera_pose, image_data = self.get_robot_vision()
             self.update_visibility(camera_pose, image_data, q)
-            self.update_occupancy(camera_pose, image_data, q)
+            
+            if attachment is None:
+
+                self.update_occupancy(camera_pose, image_data, q)
+                self.update_movable_boxes(image_data)
+
+
+            else:
+                
+                set_joint_positions(self.robot, left_arm_joints, LEFT_ATTACH_CONF)
+                set_joint_positions(self.robot, right_arm_joints, RIGHT_ATTACH_CONF)
+
+
+            if attachment is not None:
+                self.clear_noise_from_attached(q, attachment)
+
+            if(should_plot=="Y"):
+                self.plot_grids(visibility=True, occupancy=True, movable=True)
 
             if attachment is None:
-                self.update_movable_boxes(image_data)
-            self.plot_grids(visibility=True, occupancy=True)
-
-            if len(set(self.occupancy_grid.occupied_voxels_from_aabb(self.aabb_from_q(q)))) > 0:
-                collisions.append((q, attachment))
-                break
+                if len(set(self.occupancy_grid.occupied_voxels_from_aabb(self.aabb_from_q(q)))) > 0:
+                    collisions.append((q, attachment))
+                    break
+                
             if attachment is not None:
                 obj_aabb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1]).aabb
                 if len(set(self.occupancy_grid.occupied_voxels_from_aabb(obj_aabb))) > 0:
@@ -893,7 +917,11 @@ class Environment(ABC):
         self.movable_boxes = new_l
 
         # Eliminate occupancy grid voxels where the object is
-        for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(obj_oobb.aabb, 1.1)):
+        lower = obj_oobb.aabb.lower
+        upper = obj_oobb.aabb.upper
+        obj_oobb_aabb = AABB(lower=[lower[0]-0.1, lower[1]-0.1, lower[2]], upper=[upper[0]+0.1, upper[1]+0.1, upper[2]])
+
+        for voxel in self.occupancy_grid.voxels_from_aabb(scale_aabb(obj_oobb_aabb, 1.1)):
             self.occupancy_grid.set_free(voxel)
 
     def move_robot(self, q, joints, attachment=None):

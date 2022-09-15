@@ -16,6 +16,31 @@ import math
 MOVO_URDF = "models/srl/movo_description/movo_robotiq_collision.urdf"
 MOVO_PATH = os.path.abspath(MOVO_URDF)
 
+
+LEFT_ARM_JOINT_NAMES=[
+        "left_shoulder_pan_joint",
+        "left_shoulder_lift_joint",
+        "left_arm_half_joint",
+        "left_elbow_joint",
+        "left_wrist_spherical_1_joint",
+        "left_wrist_spherical_2_joint",
+        "left_wrist_3_joint",
+        "linear_joint"
+    ]
+RIGHT_ARM_JOINT_NAMES = [
+        "right_shoulder_pan_joint",
+        "right_shoulder_lift_joint",
+        "right_arm_half_joint",
+        "right_elbow_joint",
+        "right_wrist_spherical_1_joint",
+        "right_wrist_spherical_2_joint",
+        "right_wrist_3_joint",
+        "linear_joint"
+    ]
+
+RIGHT_ATTACH_CONF = [-0.021811289327748895, -0.5591495793058756, 0.09515283160149757, -0.9770537496674913, 0.22921576166484137, 1.059975131790689, -1.6935222466767996,0]
+LEFT_ATTACH_CONF = [-0.2760957691629127, 0.5009078441624968, 0.2956304885223213, 1.2349056669408707, -0.012336294801464476, -0.3835782875974208, 1.7257314490066005,0]
+
 TUCKED_DEFAULT_JOINTS = {
     "pan_joint": -0.07204942405223846,
     "tilt_joint": -0.799216890335083,

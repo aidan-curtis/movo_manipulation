@@ -1,7 +1,8 @@
 from environments.environment import Environment, Room, LIGHT_GREY, GRID_HEIGHT
-from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_pose, Pose, 
+from pybullet_planning.pybullet_tools.utils import (TAN, AABB, set_joint_position, set_pose, Pose, 
                                                     Point, LockRenderer, get_aabb)
 import pybullet as p
+import math
 
 class SingleMovable(Environment):
     def __init__(self, **kwargs):
@@ -26,7 +27,8 @@ class SingleMovable(Environment):
             self.robot = self.setup_robot()
             blocking_chair = self.add_chair()
 
-            # set_joint_position(blocking_chair, 17, random.uniform(-math.pi, math.pi))
+            
+            set_joint_position(blocking_chair, 17, math.pi)
             set_pose(blocking_chair,
                 Pose(point=Point(
                         x=3,
