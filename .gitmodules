@@ -1,0 +1,3 @@
+[submodule "motion"]
+    path = pybullet_planning/motion
+    url = https://github.com/caelan/motion-planners

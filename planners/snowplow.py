@@ -44,7 +44,7 @@ class Snowplow(Planner):
 
 
 
-    def get_plan(self, debug=False, loadfile=None, **kwargs):
+    def get_plan(self, debug=False, loadfile=None, from_plan=None, **kwargs):
         self.debug = debug
         self.current_q, q_goal = self.env.start, self.env.goal
         # Gets initial vision and updates the current vision based on it
@@ -67,6 +67,12 @@ class Snowplow(Planner):
             for i, obj in enumerate(self.env.room.movable_obstacles):
                 set_pose(obj, self.object_poses[i])
             print("State loaded")
+
+
+        if from_plan is not None:
+            self.current_q, complete, gained_vision, executed_path = self.execute_path(from_plan, blind=True)
+            self.final_executed += executed_path
+            self.v_0.update(gained_vision)
 
         complete = False
         while not complete:
@@ -269,7 +275,7 @@ class Snowplow(Planner):
         return None
 
 
-    def execute_path(self, path):
+    def execute_path(self, path, blind=False):
         """
         Executes a given path in simulation until it is complete or no longer feasible.
 
@@ -335,8 +341,12 @@ class Snowplow(Planner):
             if attachment is not None:
                 self.env.clear_noise_from_attached(q, attachment)
 
+            if blind:
+                self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+                continue
+
             # Check if remaining path is collision free under the new occupancy grid
-            obstructions, collided_obj = self.find_obstruction_ahead(path[qi:], attachment)
+            obstructions, collided_obj = self.find_obstruction_ahead(path[qi:qi+5], attachment)
             if obstructions.shape[0] > 0 or collided_obj is not None:
                 print("Found a collision on this path. Aborting")
                 self.env.plot_grids(visibility=True, occupancy=True, movable=True)

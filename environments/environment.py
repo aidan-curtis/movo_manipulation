@@ -394,8 +394,20 @@ class Environment(ABC):
             set: A set of voxels that correspond to the gained vision.
         """
         vision = set()
-        for q in path:
+        for qi, q in enumerate(path):
             vision.update(self.get_optimistic_vision(q, G, attachment=attachment, obstructions=obstructions))
+            if len(q) == 2:
+                attach = path[qi][1]
+                attach_prev = path[qi-1][1]
+                if attach is None and attach_prev is not None and qi > 0:
+                    q = path[qi-1][0]
+                    attach = path[qi-1][1]
+                    obj_oobb = self.movable_object_oobb_from_q(attach[0], q, attach[1])
+                    vision.update(self.visibility_grid.voxels_from_aabb(scale_aabb(obj_oobb.aabb, 1.2)))
+        if attachment is not None:
+            q = path[-1]
+            obj_oobb = self.movable_object_oobb_from_q(attachment[0], q, attachment[1])
+            vision.update(self.visibility_grid.voxels_from_aabb(scale_aabb(obj_oobb.aabb, 1.2)))
         return vision
 
     @functools.lru_cache(typed=False)
@@ -1214,9 +1226,6 @@ class Environment(ABC):
         camera_pose = get_link_pose(self.robot, camera_link)
 
         camera_image = get_image_at_pose(camera_pose, CAMERA_MATRIX, far=FAR, segment=True)
-        if(self.debug):
-            save_camera_images(camera_image.rgbPixels, camera_image.depthPixels, camera_image.segmentationMaskBuffer,\
-                                 prefix=str(time.time()), directory=self.save_dir)
 
         return camera_pose, camera_image
 

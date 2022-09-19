@@ -107,6 +107,14 @@ def get_args():
         help="seed"
     )
 
+    parser.add_argument(
+        "-f_p",
+        "--from_plan",
+        type=str,
+        default=None,
+        help="Filename of the file to restart planning from"
+    )
+
 
     args = parser.parse_args()
     return args
@@ -125,12 +133,21 @@ if __name__=="__main__":
 
     random.seed(args.seed)
     np.random.seed(args.seed)
-
     env = ENVIRONMENTS[args.env](vis=args.vis, debug=args.debug, save_dir = args.save_dir)
     planner = PLANNERS[args.algo](env)
     start_time = time.time()
+
+    from_plan = None
+    if args.from_plan is not None:
+        with open(args.from_plan, 'rb') as handle:
+            data = pickle.load(handle)
+            from_plan = data["plan"]
+            print(from_plan)
+
+
+
     if(args.only_validate is None):
-        plan = planner.get_plan(loadfile=args.load, debug=args.debug)
+        plan = planner.get_plan(loadfile=args.load, debug=args.debug, from_plan=from_plan)
     else:
         with open(args.only_validate, 'rb') as handle:
             data = pickle.load(handle)
@@ -138,7 +155,7 @@ if __name__=="__main__":
 
     plan_time = time.time()-start_time
     print(plan)
-    wait_if_gui()
+    # wait_if_gui()
     statistics = env.validate_plan(plan)
 
     print(statistics)
@@ -148,8 +165,8 @@ if __name__=="__main__":
             if att is not None:
                 draw_aabb(env.movable_object_oobb_from_q(att[0], q, att[1]).aabb)
             env.move_robot(q, env.joints, att)
-            wait_if_gui()
-        wait_if_gui()
+            # wait_if_gui()
+        # wait_if_gui()
         
     results_dict = {"success": statistics[0],
                     "collisions":len(statistics[1]), 

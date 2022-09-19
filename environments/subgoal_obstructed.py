@@ -137,7 +137,7 @@ class SubObs(Environment):
 
         i = np.random.randint(0, 3)
         self.goal = (self.goal[0],
-                     round(self.goal[1] - i*GRID_RESOLUTION, 2),
+                     round(self.goal[1] + i*GRID_RESOLUTION, 2),
                      self.goal[2])
 
         i = np.random.randint(-5, 0)

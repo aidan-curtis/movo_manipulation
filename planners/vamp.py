@@ -141,9 +141,11 @@ class Vamp(Planner):
                 p_vis = self.vavp(q, required_viewing, v)
                 # If the relaxed version fails, explore some of the environment. And restart the search
                 if p_vis is None:
-                    print("P_VIS failed. Observing some of the environment")
-                    W = set(self.env.static_vis_grid.value_from_voxel.keys())
-                    p_vis = self.tourist(q, W.difference(v), v)
+                    # print("P_VIS failed. Observing some of the environment")
+                    # W = set(self.env.static_vis_grid.value_from_voxel.keys())
+                    # p_vis = self.tourist(q, W.difference(v), v)
+                    # TODO: Uncomment this and eliminate the return None statement, it is just to failt faster
+                    return None
                 if p_vis is None:
                     print("P_VIS failed again. Aborting")
                     return None
@@ -513,7 +515,7 @@ class Vamp(Planner):
             gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
 
             # Check if remaining path is collision free under the new occupancy grid
-            obstructions, collided_obj = self.env.obstruction_from_path(path[qi:], set())
+            obstructions, collided_obj = self.env.obstruction_from_path(path[qi:qi+5], set())
             if obstructions.shape[0] > 0 or collided_obj is not None:
                 print("Found a collision on this path. Aborting")
                 self.env.plot_grids(visibility=True, occupancy=True, movable=True)

@@ -50,7 +50,7 @@ class Lamb(Planner):
         self.object_poses = None
         self.max_movables = 0
 
-    def get_plan(self, loadfile=None, debug=False, **kwargs):
+    def get_plan(self, loadfile=None, debug=False, from_plan=None, **kwargs):
         """
         Creates a plan and executes it based on the given planner and environment.
 
@@ -88,6 +88,11 @@ class Lamb(Planner):
                 set_pose(obj, self.object_poses[i])
             self.env.plot_grids(True, True, True)
             print("State loaded")
+
+        if from_plan is not None:
+            self.current_q, complete, gained_vision, executed_path = self.execute_path(from_plan, blind=True)
+            self.final_executed += executed_path
+            self.v_0.update(gained_vision)
 
 
 
@@ -623,7 +628,7 @@ class Lamb(Planner):
         except KeyboardInterrupt:
             return None
 
-    def execute_path(self, path):
+    def execute_path(self, path, blind=False):
         """
         Executes a given path in simulation until it is complete or no longer feasible.
 
@@ -688,8 +693,12 @@ class Lamb(Planner):
             if attachment is not None:
                 self.env.clear_noise_from_attached(q, attachment)
 
+            if blind:
+                self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+                continue
+
             # Check if remaining path is collision free under the new occupancy grid
-            obstructions, collided_obj = self.find_obstruction_ahead(path[qi:], attachment)
+            obstructions, collided_obj = self.find_obstruction_ahead(path[qi:qi+5], attachment)
             if obstructions.shape[0] > 0 or collided_obj is not None:
                 print("Found a collision on this path. Aborting")
                 self.env.plot_grids(visibility=True, occupancy=True, movable=True)
@@ -699,8 +708,13 @@ class Lamb(Planner):
                 # If the current q is in collision with movable due to expansion of aabb in
                 # last step or an intermediate configuration. Then backtrack to the
                 # last step on the already executed path where this does not happen.
+                camera_pose, image_data = self.env.get_robot_vision()
+                self.env.update_occupancy(q, image_data)
+                gained_vision.update(self.env.update_movable_boxes(image_data))
+                gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
                 _, collided_obj = self.find_obstruction_ahead([(q, None)], None)
-                while collided_obj is not None:
+                oobb = self.env.find_path_movable_obstruction([q])
+                while collided_obj is not None and qi > 0:
                     qi -= 1
                     q = path[qi][0]
                     if attachment is not None:
@@ -709,11 +723,23 @@ class Lamb(Planner):
                     self.env.move_robot(q, self.joints, attachment=attachment)
                     executed.append([q, attachment])
 
+
                     if attachment is not None:
                         oobb = self.env.movable_object_oobb_from_q(attachment[0], q, attachment[1])
                         self.env.movable_boxes.append(oobb)
-                    _, collided_obj = self.find_obstruction_ahead([(q, None)], None)
 
+                    # Get updated occupancy grid at each step
+                    camera_pose, image_data = self.env.get_robot_vision()
+                    self.env.update_occupancy(q, image_data)
+                    gained_vision.update(self.env.update_movable_boxes(image_data))
+                    gained_vision.update(self.env.update_visibility(camera_pose, image_data, q))
+                    _, collided_obj = self.find_obstruction_ahead([(q, None)], None)
+                    oobb = self.env.find_path_movable_obstruction([q])
+                    print(oobb)
+                    print(collided_obj)
+                    self.env.plot_grids(visibility=True, occupancy=True, movable=True)
+
+                self.env.plot_grids(visibility=True, occupancy=True, movable=True)
                 return q, False, gained_vision, executed
             self.env.plot_grids(visibility=True, occupancy=True, movable=True)
 
